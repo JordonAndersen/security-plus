@@ -136,6 +136,20 @@ mark{background:#ffe58a;color:#1d2330;border-radius:2px;padding:0 1px}
 .fc.flipped .fc-front{text-align:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}
 .fc-big{font-size:34px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:10px 0}
 .fc-full{font-size:20px;font-weight:650;margin-bottom:8px}
+.cc-body{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 22px;line-height:1.6}
+.cc-body h3{font-size:15.5px;margin:18px 0 8px}.cc-body h3:first-child{margin-top:0}
+.cc-body ul,.cc-body ol{padding-left:22px;margin:6px 0 10px}.cc-body li{margin:4px 0}
+.cc-body ol.steps>li{margin:10px 0}
+table.cc{width:100%;margin:8px 0 12px;border-radius:8px}
+table.cc th{width:30%;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);background:var(--chip);vertical-align:top}
+table.cc td{font-size:14px}
+table.pairs th{width:32%}
+.ccbtns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px}
+.ccbtns .btn{padding:6px 12px;font-size:13.5px}
+.ccdone{display:flex;gap:8px;align-items:center;font-weight:600;margin:0 auto}
+.ccprog{padding:6px 10px 10px}.ccprog .bar{margin-top:6px}
+ul.checklist li{margin:8px 0}
+@media (max-width:820px){table.cc th{width:auto}}
 @media (max-width:820px){.acrgrid{grid-template-columns:1fr}.refbar{position:static}}
 @media (max-width:820px){
   .wrap{grid-template-columns:1fr}
@@ -158,7 +172,8 @@ window.PBQ = {
   addMC(domain, list){ for (const q of list) this.mc.push(Object.assign({domain}, q)); },  // multiple choice
   acr: [], ports: [],
   addAcronyms(list){ this.acr.push(...list); },   // reference: acronyms
-  addPorts(list){ this.ports.push(...list); }     // reference: ports
+  addPorts(list){ this.ports.push(...list); },    // reference: ports
+  crash: [], addCrash(list){ this.crash.push(...list); }  // crash course sections
 };
 </script>
 <!-- PBQ bank: one file per exam domain (or topic). Add new files here. -->
@@ -182,11 +197,13 @@ window.PBQ = {
 <script src="ref/acronyms-a-l.js"></script>
 <script src="ref/acronyms-m-z.js"></script>
 <script src="ref/ports.js"></script>
+<!-- Crash course -->
+<script src="crash/content.js"></script>
 </head>
 <body>
 <header>
   <h1>Security+ PBQ Practice Lab</h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button></span>
   <span class="score" id="score"></span>
 </header>
 <div class="wrap">
@@ -334,10 +351,11 @@ let TAB="pbq";
 function setTab(t){
   TAB=t; clearInterval(timerId);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
-  document.querySelector(".wrap").classList.toggle("single",t!=="pbq");
+  document.querySelector(".wrap").classList.toggle("single",t!=="pbq"&&t!=="crash");
   if(t==="mcq"){ try{history.replaceState(null,"","#mcq")}catch(e){} MC.home(); }
   else if(t==="exam"){ try{history.replaceState(null,"","#exam")}catch(e){} EX.home(); }
   else if(t==="ref"){ try{history.replaceState(null,"","#ref")}catch(e){} REF.home(); }
+  else if(t==="crash"){ CC.home(); }
   else { if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded.</div>'; return; } go(cur); }
   window.scrollTo(0,0);
 }
@@ -490,7 +508,8 @@ const MC = (() => {
   });
   // Lets the practice exam record results into the same per-question stats
   function rec(q, ok){ const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats(); }
-  return { home, rec, same, correctSet };
+  function preset(o){ Object.assign(prefs, o); store.set("mcq-prefs", prefs); }
+  return { home, rec, same, correctSet, preset };
 })();
 </script>
 <script>
@@ -668,7 +687,8 @@ const EX = (() => {
     if(e.target.id==="onlywrong"){ document.querySelectorAll("#reviewcard .review").forEach(r=>r.style.display=(e.target.checked&&r.dataset.ok==="1")?"none":""); }
     if(X && e.target.closest && e.target.closest("[data-x],input[name=xopt],input[name=xmulti]")) { readDOM(); const n=X.items.length,u=X.items.filter(x=>!answered(x)).length; $("#score").textContent=`Practice exam in progress · ${n-u}/${n} answered`; }
   });
-  return { home, inProgress:()=>!!X };
+  function preset(o){ if(o.level){ xlvl=o.level; store.set("exam-level",xlvl); } }
+  return { home, inProgress:()=>!!X, preset };
 })();
 
 // ---------------- Acronyms & ports reference ----------------
@@ -778,6 +798,7 @@ const REF = (() => {
   function mark(ok){ const c=deck[di]; if(!c) return; known[c.key]=ok?1:0; store.set("ref-known",known); ok?sess.k++:sess.u++; di++; flipped=false; cardsView(); }
 
   function home(){ ({acr:acrView, ports:portView, cards:cardsView})[st.view](); }
+  function open(view, d){ st.view=view; st.q=""; if(d){ st.deck=d; buildDeck(); } save(); }
 
   document.addEventListener("click", e=>{
     if(TAB!=="ref") return;
@@ -807,11 +828,73 @@ const REF = (() => {
     else if(flipped && e.key==="1") mark(false);
     else if(flipped && e.key==="2") mark(true);
   });
-  return { home };
+  return { home, open };
 })();
 
+// ---------------- Crash course ----------------
+const CC = (() => {
+  const S = PBQ.crash;
+  let done = store.get("cc-done", {});
+  let cur = store.get("cc-cur", S.length ? S[0].id : null);
+  const idx = () => Math.max(0, S.findIndex(s=>s.id===cur));
+  function nav(){
+    const n=S.filter(s=>done[s.id]).length;
+    let html=`<div class="ccprog"><div class="muted">${n} of ${S.length} sections reviewed</div><div class="bar" style="width:100%"><i style="width:${S.length?Math.round(n/S.length*100):0}%"></i></div></div>`, last="";
+    S.forEach(s=>{ if(s.group!==last){ html+=`<div class="grp">${esc(s.group)}</div>`; last=s.group; }
+      html+=`<button class="${s.id===cur?"active":""}" data-cc-go="${s.id}"><span class="num ${done[s.id]?"pass":""}">${done[s.id]?"✓":"•"}</span><span>${esc(s.title)}</span></button>`; });
+    html+=`<div class="tools"><button data-cc-reset="1">↺ Reset reviewed marks</button></div>`;
+    $("#nav").innerHTML=html;
+    $("#score").textContent=`Crash course · ${n}/${S.length} reviewed`;
+  }
+  function home(){
+    if(!S.length){ $("#main").innerHTML='<div class="err">No crash course content loaded.</div>'; return; }
+    const i=idx(), s=S[i];
+    try{history.replaceState(null,"","#crash-"+s.id)}catch(e){}
+    nav();
+    $("#main").innerHTML = `
+      <div class="mobile-nav"><select id="ccnav">${S.map(x=>`<option value="${x.id}" ${x.id===s.id?"selected":""}>${done[x.id]?"✓ ":""}${esc(x.group)} — ${esc(x.title)}</option>`).join("")}</select></div>
+      <div class="meta"><span class="chip">Crash course</span><span class="chip">${esc(s.group)}</span><span class="chip">${i+1} of ${S.length}</span></div>
+      <h2>${esc(s.title)}</h2>
+      <div class="cc-body">${s.html}</div>
+      <div class="actions">
+        <button class="btn" data-cc-step="-1" ${i===0?"disabled":""}>← Previous</button>
+        <label class="ccdone"><input type="checkbox" id="ccdone" ${done[s.id]?"checked":""}> I've reviewed this</label>
+        <button class="btn primary" data-cc-step="1" ${i===S.length-1?"disabled":""}>Next →</button>
+      </div>`;
+    window.scrollTo(0,0);
+  }
+  function go(id){ cur=id; store.set("cc-cur",cur); home(); }
+  const JUMP = {
+    "mcq-hard":()=>{ MC.preset({levels:["hard"], doms:[1,2,3,4,5], pool:"all", mode:"study"}); setTab("mcq"); },
+    "mcq-missed":()=>{ MC.preset({levels:["easy","medium","hard"], doms:[1,2,3,4,5], pool:"missed", mode:"study"}); setTab("mcq"); },
+    "pbq-hard":()=>{ pbqLevel="hard"; store.set("pbq-level","hard"); const v=visibleIdx(); if(v.length) cur_pbq(v[0]); setTab("pbq"); },
+    "exam":()=>{ EX.preset({level:"all"}); setTab("exam"); },
+    "exam-hard":()=>{ EX.preset({level:"hard"}); setTab("exam"); },
+    "ref-acr-cards":()=>{ REF.open("cards","acr-key"); setTab("ref"); },
+    "ref-port-cards":()=>{ REF.open("cards","port-s2p"); setTab("ref"); },
+    "ref-ports":()=>{ REF.open("ports"); setTab("ref"); }
+  };
+  [1,2,3,4,5].forEach(d=>JUMP["mcq-d"+d]=()=>{ MC.preset({doms:[d], levels:["easy","medium","hard"], pool:"all", mode:"study"}); setTab("mcq"); });
+  function cur_pbq(i){ cur_set(i); }
+  document.addEventListener("click", e=>{
+    const j=e.target.closest("[data-cc]"); if(j && JUMP[j.dataset.cc]) return JUMP[j.dataset.cc]();
+    if(TAB!=="crash") return;
+    const g=e.target.closest("[data-cc-go]"); if(g) return go(g.dataset.ccGo);
+    const st=e.target.closest("[data-cc-step]"); if(st){ const i=idx()+(+st.dataset.ccStep); if(S[i]) go(S[i].id); return; }
+    if(e.target.closest("[data-cc-reset]")){ done={}; store.set("cc-done",done); home(); }
+  });
+  document.addEventListener("change", e=>{
+    if(TAB!=="crash") return;
+    if(e.target.id==="ccdone"){ done[cur]=e.target.checked; if(!done[cur]) delete done[cur]; store.set("cc-done",done); nav(); }
+    if(e.target.id==="ccnav") go(e.target.value);
+  });
+  return { home, go };
+})();
+function cur_set(i){ cur=i; }
+
 // Initial route
-(() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h); const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
+(() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
+  if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
 </body>
 </html>

@@ -146,6 +146,12 @@ Reference data lives in `ref/`:
 
 The tab has three views. **Acronyms** has live search, a category filter, and a high-yield toggle. **Ports** is a searchable table with an insecure-only filter. **Flashcards** offers high-yield, all, or per-category acronym decks, plus port→service and service→port decks, with mastered/missed tracking (keyboard: Space, 1, 2). The validator checks for duplicate acronyms and ports and for unknown categories.
 
+## Crash course tab
+
+`crash/content.js` holds the study guide as `PBQ.addCrash([{ id, group, title, html }])`. Sections are grouped in the sidebar by `group`. Readers can tick each section as reviewed, and progress is saved in their browser. Deep links work as `#crash-<id>` (e.g., `#crash-pairs`).
+
+Buttons inside a section can jump straight into a drill with `<button class="btn" data-cc="ACTION">`, where ACTION is one of: `mcq-hard`, `mcq-missed`, `mcq-d1`…`mcq-d5`, `pbq-hard`, `exam`, `exam-hard`, `ref-acr-cards`, `ref-port-cards`, `ref-ports`. The validator flags unknown actions.
+
 ## Practice exam tab
 
 This builds a random exam from both banks each time:

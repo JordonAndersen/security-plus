@@ -112,6 +112,24 @@ for (const x of ports) {
   if (!x.p || !x.pr || !x.s || !x.d || !x.sec) errors.push(`[port ${x.p || "?"}] needs p, pr, s, d and sec`);
   if (seenP.has(x.p)) errors.push(`[port ${x.p}] duplicate`); seenP.add(x.p);
 }
+// ---- Crash course ----
+const cdir = path.join(__dirname, "..", "crash");
+const crash = [];
+const cfiles = fs.existsSync(cdir) ? fs.readdirSync(cdir).filter(f => f.endsWith(".js")).sort() : [];
+for (const f of cfiles) {
+  if (!index.includes(`crash/${f}`)) errors.push(`[${f}] not referenced by a <script src> tag in index.html`);
+  const ctx = { PBQ: { addCrash(l) { crash.push(...l); } } };
+  try { vm.runInNewContext(fs.readFileSync(path.join(cdir, f), "utf8"), ctx, { filename: f }); }
+  catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
+}
+const JUMPS = ["mcq-hard","mcq-missed","mcq-d1","mcq-d2","mcq-d3","mcq-d4","mcq-d5","pbq-hard","exam","exam-hard","ref-acr-cards","ref-port-cards","ref-ports"];
+const cids = new Set();
+for (const s of crash) {
+  if (!s.id || !s.title || !s.group || !s.html) errors.push(`[crash ${s.id || "?"}] needs id, group, title, html`);
+  if (cids.has(s.id)) errors.push(`[crash ${s.id}] duplicate id`); cids.add(s.id);
+  for (const m of (s.html || "").matchAll(/data-cc="([^"]+)"/g)) if (!JUMPS.includes(m[1])) errors.push(`[crash ${s.id}] unknown jump "${m[1]}"`);
+}
+console.log(`Crash course: ${crash.length} sections`);
 console.log(`Ref: ${acr.length} acronyms (${acr.filter(x => x.k).length} high-yield), ${ports.length} ports`);
 
 if (errors.length) { console.error(`\n${errors.length} problem(s):\n` + errors.map(e => "  - " + e).join("\n")); process.exit(1); }
