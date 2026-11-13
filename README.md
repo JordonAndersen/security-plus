@@ -117,6 +117,25 @@ PBQ.addMC(4, [
 
 The page offers two modes: **Study** (feedback after each question) and **Exam sim** (1 min per question, results at the end with a full review). It can draw from four pools: all, not seen yet, missed last time, and below 70% accuracy. Stats are kept per question in the browser.
 
+## Practice exam tab
+
+This builds a random exam from both banks each time:
+
+| Length | PBQs | Multiple choice | Time |
+|---|---|---|---|
+| Full | 4 (first, as on the real exam) | 86 | 90 min |
+| Half | 2 | 43 | 45 min |
+
+- Multiple-choice questions are drawn per domain using the official weights (largest-remainder rounding). PBQs are chosen from different domains where possible.
+- Scoring: multiple choice = 1 point. A PBQ = 3 points with partial credit (fraction of fields correct; order questions by correct positions; select-all = hits minus wrong picks). The percentage is mapped linearly to an **estimated** 100–900 scale with 750 to pass. CompTIA doesn't publish its formula, so this is a guide only.
+- Results show the score by domain, a full review with explanations, and an attempt history (last 50) with domain averages over the last 5 exams. Multiple-choice results also count toward the per-question stats used by the "missed" and "weak" pools.
+
+To change the mix, edit `W`, `LEN`, or `PBQ_POINTS` at the top of the practice exam script in `index.html`.
+
+## About question sources
+
+All questions are original and written against the public SY0-701 exam objectives. Never add real exam questions or "brain dump" content: CompTIA's candidate agreement prohibits it, and using it can get certifications revoked. When SY0-801 arrives, add new questions mapped to its objectives in new files (e.g., `mcq/v8-d1.js`).
+
 ### Suggested weighting
 
 Match the SY0-701 domain weights when you add questions: D1 12%, D2 22%, D3 18%, D4 28%, D5 20%.

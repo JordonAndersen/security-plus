@@ -144,11 +144,12 @@ window.PBQ = {
 <script src="mcq/d3-architecture.js"></script>
 <script src="mcq/d4-operations.js"></script>
 <script src="mcq/d5-program-management.js"></script>
+<script src="mcq/set2.js"></script>
 </head>
 <body>
 <header>
   <h1>Security+ PBQ Practice Lab</h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button></span>
   <span class="score" id="score"></span>
 </header>
 <div class="wrap">
@@ -282,8 +283,9 @@ let TAB="pbq";
 function setTab(t){
   TAB=t; clearInterval(timerId);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
-  document.querySelector(".wrap").classList.toggle("single",t==="mcq");
+  document.querySelector(".wrap").classList.toggle("single",t!=="pbq");
   if(t==="mcq"){ try{history.replaceState(null,"","#mcq")}catch(e){} MC.home(); }
+  else if(t==="exam"){ try{history.replaceState(null,"","#exam")}catch(e){} EX.home(); }
   else { if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded.</div>'; return; } go(cur); }
   window.scrollTo(0,0);
 }
@@ -428,11 +430,184 @@ const MC = (() => {
     else return;
     store.set("mcq-prefs",prefs); info();
   });
-  return { home };
+  // Lets the practice exam record results into the same per-question stats
+  function rec(q, ok){ const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats(); }
+  return { home, rec, same, correctSet };
+})();
+</script>
+<script>
+// ---------------- Practice exam (PBQ + MC, domain-weighted, timed) ----------------
+const EX = (() => {
+  const W = {1:.12, 2:.22, 3:.18, 4:.28, 5:.20};            // SY0-701 domain weights
+  const LEN = { full:{p:4, m:86, min:90, label:"Full exam — 90 questions, 90 minutes"},
+                half:{p:2, m:43, min:45, label:"Half exam — 45 questions, 45 minutes"} };
+  const PBQ_POINTS = 3;                                      // PBQs weigh more than MC; partial credit
+  const PASS = 750;
+  let hist = store.get("exam-history", []);
+  let X = null, tick = null, len = store.get("exam-len","full");
+  const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+  const pctS = x => Math.round(x*100)+"%";
+  const barCls = x => x>=.8?"":x>=.65?"mid":"low";
+  const scaled = p => Math.round(100 + 800*p);
+
+  function alloc(n){
+    const r=[1,2,3,4,5].map(d=>({d, n:Math.floor(n*W[d]), f:n*W[d]-Math.floor(n*W[d])}));
+    let left=n-r.reduce((s,x)=>s+x.n,0);
+    [...r].sort((a,b)=>b.f-a.f).forEach(x=>{ if(left>0){x.n++;left--;} });
+    return Object.fromEntries(r.map(x=>[x.d,x.n]));
+  }
+  function newP(q){
+    const t=q.type||"grid", it={kind:"pbq", q, t, flag:false, touched:false};
+    if(t==="grid") it.vals={};
+    if(t==="order"){ let o=shuffle(q.items.map((_,i)=>i)); while(o.every((v,i)=>v===i)) o=shuffle(o); it.order=o; }
+    if(t==="multi"){ it.mo=shuffle(q.choices.map((_,i)=>i)); it.checked=[]; }
+    return it;
+  }
+  function build(){
+    const L=LEN[len], per=alloc(L.m); let mcs=[], short=0;
+    for(const d of [1,2,3,4,5]){ const p=shuffle(PBQ.mc.filter(q=>q.domain===d)); mcs.push(...p.slice(0,per[d])); short+=Math.max(0,per[d]-p.length); }
+    if(short) mcs.push(...shuffle(PBQ.mc.filter(q=>!mcs.includes(q))).slice(0,short));
+    const ps=shuffle(Q), pick=[], used=new Set();
+    for(const q of ps) if(pick.length<L.p && !used.has(q.domain)){ pick.push(q); used.add(q.domain); }
+    for(const q of ps) if(pick.length<L.p && !pick.includes(q)) pick.push(q);
+    return { items:[...pick.map(newP), ...shuffle(mcs).map(q=>({kind:"mc", q, order:shuffle(q.o.map((_,k)=>k)), sel:[], flag:false}))],
+             i:0, start:Date.now(), limit:L.min*60, confirm:false, len };
+  }
+  const answered = it => it.kind==="mc" ? it.sel.length>0 :
+    it.t==="grid" ? Object.values(it.vals).some(v=>v!=="") : it.t==="order" ? it.touched : it.checked.length>0;
+
+  // ---------- home ----------
+  function home(){
+    if(X) return show();               // resume an exam in progress after switching tabs
+    clearInterval(tick);
+    $("#score").textContent = hist.length ? `${hist.length} exam${hist.length>1?"s":""} taken · best ${Math.max(...hist.map(h=>h.score))}` : "No practice exams yet";
+    const avg = d => { const xs=hist.filter(h=>h.dom[d]!=null).slice(-5); return xs.length? xs.reduce((s,h)=>s+h.dom[d],0)/xs.length : null; };
+    const domRows=[1,2,3,4,5].map(d=>{const a=avg(d);return `<div class="dom" style="cursor:default"><span class="nm">${esc(DOMAINS[d])} <span class="muted">· ${Math.round(W[d]*100)}% of exam</span></span><span class="bar"><i class="${a==null?"":barCls(a)}" style="width:${a==null?0:Math.round(a*100)}%"></i></span><span class="stat">${a==null?"—":pctS(a)}</span></div>`}).join("");
+    const rows=hist.slice().reverse().slice(0,15).map(h=>`<tr><td>${new Date(h.d).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</td><td>${h.len==="half"?"Half":"Full"}</td><td><b style="color:${h.score>=PASS?"var(--ok)":"var(--bad)"}">${h.score}</b></td><td>${pctS(h.pct)}</td><td>${fmt(h.secs)}</td></tr>`).join("");
+    const r=(v)=>`<label><input type="radio" name="exlen" value="${v}" ${len===v?"checked":""}> ${LEN[v].label}</label>`;
+    $("#main").innerHTML = `
+      <h2>Practice exam</h2>
+      <p class="muted">Every exam is assembled at random from the bank: performance-based questions first (like the real test), then multiple choice weighted to the official SY0-701 domain percentages. ${Q.length} PBQs and ${PBQ.mc.length} multiple-choice questions are in the pool.</p>
+      <div class="card"><h3>Length</h3><div class="row" style="flex-direction:column;gap:8px">${r("full")}${r("half")}</div></div>
+      <div class="card"><h3>How it's scored</h3><p class="muted" style="margin:0">Multiple choice = 1 point. PBQs = ${PBQ_POINTS} points each with partial credit. Your percentage is converted to an <b>estimated</b> 100–900 scale (pass mark 750). CompTIA doesn't publish its scoring formula, so treat the scaled score as a guide — consistently scoring 800+ here is a good sign.</p></div>
+      <div class="actions"><button class="btn primary" data-ex="start">Start exam</button>${hist.length?'<button class="btn" data-ex="clearhist" style="margin-left:auto">Clear exam history</button>':""}</div>
+      ${hist.length?`<div class="card"><h3>Domain average (last 5 exams)</h3><div class="doms">${domRows}</div></div>
+      <div class="card"><h3>Attempt history</h3><table><thead><tr><th>Date</th><th>Length</th><th>Score</th><th>%</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table></div>`:""}`;
+  }
+
+  // ---------- exam ----------
+  function start(){
+    X=build(); clearInterval(tick);
+    tick=setInterval(()=>{ const left=X.limit-Math.floor((Date.now()-X.start)/1000); const t=$("#extimer"); if(t){t.textContent=fmt(Math.max(0,left)); t.style.color=left<600?"var(--bad)":"";} if(left<=0 && TAB==="exam"){ readDOM(); finish(); } },1000);
+    show();
+  }
+  function bodyFor(it){
+    const q=it.q;
+    if(it.kind==="mc"){
+      const multi=Array.isArray(q.a);
+      return `<p class="qtext">${esc(q.q)}</p><ul class="opts">${it.order.map(k=>`<li><label class="opt"><input type="${multi?"checkbox":"radio"}" name="xopt" value="${k}" ${it.sel.includes(k)?"checked":""}><span>${esc(q.o[k])}</span></label></li>`).join("")}</ul>`;
+    }
+    let b="";
+    if(it.t==="grid"){
+      b=`<table><thead><tr><th>Item</th>${q.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`+q.rows.map((r,ri)=>`<tr><td class="lbl">${esc(r.l)}</td>`+r.a.map((a,ci)=>{const o=cellOpts(q,ri,ci),v=it.vals[ri+"_"+ci]||"";return `<td data-h="${esc(q.cols[ci])}">${!o?`<input type="text" inputmode="decimal" data-x="${ri}_${ci}" value="${esc(v)}" placeholder="Enter value">`:`<select data-x="${ri}_${ci}"><option value="">— select —</option>${o.map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("")}</select>`}</td>`}).join("")+`</tr>`).join("")+`</tbody></table>`;
+    } else if(it.t==="order"){
+      b=`<ul class="order">${it.order.map((idx,pos)=>`<li><span class="pos">${pos+1}</span><span class="txt">${esc(q.items[idx])}</span><span class="mv"><button ${pos===0?"disabled":""} data-xmv="${pos},-1">↑</button><button ${pos===it.order.length-1?"disabled":""} data-xmv="${pos},1">↓</button></span></li>`).join("")}</ul>`;
+    } else {
+      b=`<ul class="multi">${it.mo.map(i=>`<li><label><input type="checkbox" name="xmulti" value="${i}" ${it.checked.includes(i)?"checked":""}><span class="txt">${esc(q.choices[i].t)}</span></label></li>`).join("")}</ul>`;
+    }
+    return `<h2 style="font-size:19px">${esc(q.title)}</h2><div class="scenario">${q.scenario}${q.log?`<pre class="log">${esc(q.log)}</pre>`:""}</div><p class="task">${esc(q.task)}</p>${b}`;
+  }
+  function show(){
+    if(X.limit-Math.floor((Date.now()-X.start)/1000)<=0) return finish();
+    const it=X.items[X.i], n=X.items.length, left=X.limit-Math.floor((Date.now()-X.start)/1000);
+    const unanswered=X.items.filter(x=>!answered(x)).length, flagged=X.items.filter(x=>x.flag).length;
+    $("#score").textContent=`Practice exam in progress · ${n-unanswered}/${n} answered`;
+    $("#main").innerHTML = `
+      <div class="meta"><span class="chip">Question ${X.i+1} of ${n}</span><span class="chip">${it.kind==="pbq"?"Performance-based":"Multiple choice"}</span><span class="chip">Time left <b id="extimer">${fmt(Math.max(0,left))}</b></span>${it.flag?'<span class="chip flagged">Flagged</span>':""}</div>
+      ${bodyFor(it)}
+      <div class="actions"><button class="btn" data-ex="prev" ${X.i===0?"disabled":""}>← Previous</button><button class="btn" data-ex="flag">${it.flag?"Unflag":"Flag for review"}</button><button class="btn primary" data-ex="next">${X.i===n-1?"Review screen":"Next →"}</button><button class="btn" data-ex="finish" style="margin-left:auto">Finish exam</button></div>
+      ${X.confirm?`<div class="result show fail">You have <b>${unanswered}</b> unanswered and <b>${flagged}</b> flagged question(s). <button class="btn primary" data-ex="confirm" style="margin-left:8px">Submit exam</button> <button class="btn" data-ex="cancel">Keep working</button></div>`:""}
+      <div class="grid-nav">${X.items.map((x,k)=>`<button data-exjump="${k}" title="${x.kind==="pbq"?"PBQ":"MC"}" class="${answered(x)?"ans":""} ${k===X.i?"cur":""} ${x.flag?"fl":""}">${x.kind==="pbq"?"P"+(k+1):k+1}</button>`).join("")}</div>
+      <p class="tip">Strategy: PBQs are first. If one is eating your time, flag it, move on, and come back after the multiple choice. Answer everything — there's no penalty for guessing.</p>`;
+    window.scrollTo(0,0);
+  }
+  function readDOM(){
+    if(!X || TAB!=="exam" || !document.querySelector("[data-ex=flag]")) return; const it=X.items[X.i];
+    if(it.kind==="mc") it.sel=[...document.querySelectorAll("input[name=xopt]:checked")].map(x=>+x.value);
+    else if(it.t==="grid") document.querySelectorAll("[data-x]").forEach(el=>it.vals[el.dataset.x]=el.value);
+    else if(it.t==="multi") it.checked=[...document.querySelectorAll("input[name=xmulti]:checked")].map(x=>+x.value);
+  }
+
+  // ---------- grading ----------
+  function gradeItem(it){
+    const q=it.q;
+    if(it.kind==="mc"){ const ok=MC.same(it.sel, MC.correctSet(q)); return {e:ok?1:0, p:1, ok}; }
+    let frac=0;
+    if(it.t==="grid"){ let t=0,c=0; q.rows.forEach((r,ri)=>r.a.forEach((a,ci)=>{ t++; const v=it.vals[ri+"_"+ci]||""; if(typeof a==="number"){ const n=parseFloat(String(v).replace(/[$,%\s]/g,"")); if(!isNaN(n)&&Math.abs(n-a)<=0.001*Math.max(1,Math.abs(a))) c++; } else if(v===a) c++; })); frac=c/t; }
+    else if(it.t==="order"){ frac = it.touched ? it.order.filter((v,i)=>v===i).length/it.order.length : 0; }
+    else { const good=q.choices.map((c,i)=>c.c?i:-1).filter(i=>i>=0); const hit=it.checked.filter(i=>good.includes(i)).length, miss=it.checked.filter(i=>!good.includes(i)).length; frac=Math.max(0,(hit-miss)/good.length); }
+    return {e:PBQ_POINTS*frac, p:PBQ_POINTS, ok:frac===1, frac};
+  }
+  function finish(){
+    clearInterval(tick);
+    const secs=Math.min(X.limit, Math.floor((Date.now()-X.start)/1000));
+    const g=X.items.map(gradeItem); let E=0,P=0; const dom={};
+    X.items.forEach((it,k)=>{ E+=g[k].e; P+=g[k].p; const d=it.q.domain; dom[d]=dom[d]||{e:0,p:0}; dom[d].e+=g[k].e; dom[d].p+=g[k].p;
+      if(it.kind==="mc") MC.rec(it.q, g[k].ok); else { status[it.q.id]=g[k].ok?"pass":"fail"; } });
+    store.set("pbq-status",status);
+    const pct=P?E/P:0, sc=scaled(pct), domPct={}; for(const d in dom) domPct[d]=dom[d].e/dom[d].p;
+    hist.push({d:Date.now(), len:X.len, score:sc, pct, secs, dom:domPct}); hist=hist.slice(-50); store.set("exam-history",hist);
+    const pass=sc>=PASS;
+    $("#score").textContent = `${hist.length} exam${hist.length>1?"s":""} taken · best ${Math.max(...hist.map(h=>h.score))}`;
+    const domRows=[1,2,3,4,5].filter(d=>dom[d]).map(d=>{const p=domPct[d];return `<div class="dom" style="cursor:default"><span class="nm">${esc(DOMAINS[d])}<div class="muted">${X.items.filter(it=>it.q.domain===d).length} questions</div></span><span class="bar"><i class="${barCls(p)}" style="width:${Math.round(p*100)}%"></i></span><span class="stat">${pctS(p)}</span></div>`}).join("");
+    const weakest=[1,2,3,4,5].filter(d=>dom[d]).sort((a,b)=>domPct[a]-domPct[b])[0];
+    const review=X.items.map((it,k)=>{
+      const q=it.q, gr=g[k];
+      if(it.kind==="mc"){ const cs=MC.correctSet(q); return `<div class="review" data-ok="${gr.ok?1:0}"><div class="muted">Q${k+1} · ${esc(DOMAINS[q.domain])}</div><b>${esc(q.q)}</b>
+        <div class="yours" style="color:${gr.ok?"var(--ok)":"var(--bad)"}">${gr.ok?"✓":"✗"} Your answer: ${it.sel.length?it.sel.map(x=>esc(q.o[x])).join(" + "):"(blank)"}</div>${gr.ok?"":`<div class="yours" style="color:var(--ok)">Correct: ${cs.map(x=>esc(q.o[x])).join(" + ")}</div>`}<p class="muted" style="margin:6px 0 0">${esc(q.e)}</p></div>`; }
+      let det="";
+      if(it.t==="grid") det=q.rows.map((r,ri)=>{const yours=r.a.map((a,ci)=>it.vals[ri+"_"+ci]||"(blank)"); const ok=r.a.every((a,ci)=>{const v=it.vals[ri+"_"+ci]||""; return typeof a==="number"? Math.abs(parseFloat(String(v).replace(/[$,%\s]/g,""))-a)<=0.001*Math.max(1,Math.abs(a)) : v===a;}); return `<div class="yours" style="color:${ok?"var(--ok)":"var(--bad)"}">${ok?"✓":"✗"} ${esc(r.l)} — you: ${esc(yours.join(" / "))}${ok?"":` · correct: <b>${esc(r.a.join(" / "))}</b> <span class="muted">${esc(r.w)}</span>`}</div>`}).join("");
+      else if(it.t==="order") det=`<div class="yours">Correct order: ${q.items.map((s,i)=>`${i+1}. ${esc(s)}`).join(" → ")}</div>`;
+      else det=q.choices.map((c,i)=>{const on=it.checked.includes(i), ok=on===!!c.c; return `<div class="yours" style="color:${ok?"var(--ok)":"var(--bad)"}">${ok?"✓":"✗"} ${on?"[selected] ":""}${esc(c.t)} ${c.c?"(correct)":"(distractor)"}</div>`}).join("");
+      return `<div class="review" data-ok="${gr.ok?1:0}"><div class="muted">Q${k+1} · PBQ · ${esc(DOMAINS[q.domain])} · ${Math.round(gr.frac*100)}% credit</div><b>${esc(q.title)}</b>${det}<p class="muted" style="margin:6px 0 0"><b>Key takeaway:</b> ${esc(q.explain)}</p></div>`;
+    }).join("");
+    $("#main").innerHTML = `
+      <h2>Exam results</h2>
+      <div class="card"><p class="big" style="color:${pass?"var(--ok)":"var(--bad)"}">${sc} <span style="font-size:18px">${pass?"— estimated PASS":"— estimated below passing"}</span></p>
+        <p class="muted">${pctS(pct)} of points earned · passing estimate is ${PASS} · time used ${fmt(secs)} of ${fmt(X.limit)}. ${weakest?`Focus next on <b>${esc(DOMAINS[weakest])}</b>.`:""}</p></div>
+      <div class="card"><h3>Score by domain</h3><div class="doms">${domRows}</div></div>
+      <div class="actions"><button class="btn primary" data-ex="start">Take another exam</button><button class="btn" data-ex="home">Exam history</button><label class="muted" style="margin-left:auto"><input type="checkbox" id="onlywrong"> Show only questions I missed</label></div>
+      <div class="card" id="reviewcard"><h3>Full review</h3>${review}</div>`;
+    X=null; window.scrollTo(0,0);
+  }
+
+  document.addEventListener("click", e=>{
+    const mv=e.target.closest("[data-xmv]"); if(mv&&X){ const it=X.items[X.i]; const [p,d]=mv.dataset.xmv.split(",").map(Number); [it.order[p],it.order[p+d]]=[it.order[p+d],it.order[p]]; it.touched=true; return show(); }
+    const j=e.target.closest("[data-exjump]"); if(j&&X){ readDOM(); X.i=+j.dataset.exjump; X.confirm=false; return show(); }
+    const b=e.target.closest("[data-ex]"); if(!b) return;
+    const a=b.dataset.ex;
+    if(a==="start") return start();
+    if(a==="home") return home();
+    if(a==="clearhist"){ hist=[]; store.set("exam-history",hist); return home(); }
+    if(!X) return;
+    readDOM();
+    if(a==="next"){ if(X.i<X.items.length-1){X.i++; X.confirm=false; return show();} X.confirm=true; return show(); }
+    if(a==="prev"){ X.i=Math.max(0,X.i-1); X.confirm=false; return show(); }
+    if(a==="flag"){ X.items[X.i].flag=!X.items[X.i].flag; return show(); }
+    if(a==="finish"){ X.confirm=true; return show(); }
+    if(a==="cancel"){ X.confirm=false; return show(); }
+    if(a==="confirm") return finish();
+  });
+  document.addEventListener("change", e=>{
+    if(e.target.name==="exlen"){ len=e.target.value; store.set("exam-len",len); }
+    if(e.target.id==="onlywrong"){ document.querySelectorAll("#reviewcard .review").forEach(r=>r.style.display=(e.target.checked&&r.dataset.ok==="1")?"none":""); }
+    if(X && e.target.closest && e.target.closest("[data-x],input[name=xopt],input[name=xmulti]")) { readDOM(); const n=X.items.length,u=X.items.filter(x=>!answered(x)).length; $("#score").textContent=`Practice exam in progress · ${n-u}/${n} answered`; }
+  });
+  return { home, inProgress:()=>!!X };
 })();
 
 // Initial route
-(() => { const h=(location.hash||"").slice(1); if(h==="mcq") return setTab("mcq"); const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
+(() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam") return setTab(h); const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
 </body>
 </html>
