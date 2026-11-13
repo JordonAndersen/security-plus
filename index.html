@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security+ PBQ Practice Lab</title>
+<style>
+:root{
+  --bg:#f4f5f7;--panel:#fff;--ink:#1d2330;--muted:#5d6676;--line:#dde1e7;
+  --accent:#1f5fbf;--accent-ink:#fff;--ok:#1d7a46;--ok-bg:#e6f4ec;--bad:#b42318;--bad-bg:#fdecea;
+  --code-bg:#0f1720;--code-ink:#d6e2f0;--chip:#eef1f6;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#111418;--panel:#1a1f26;--ink:#e6e9ee;--muted:#9aa4b2;--line:#2c333d;
+  --accent:#5b9bff;--accent-ink:#0b1220;--ok:#4cc37f;--ok-bg:#16301f;--bad:#ff7b6e;--bad-bg:#3a1a17;--code-bg:#0a0e13;--chip:#232a33}
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0;font-weight:650}
+header .sub{color:var(--muted);font-size:13px}
+header .score{margin-left:auto;font-size:13px;color:var(--muted)}
+.wrap{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 56px)}
+nav{border-right:1px solid var(--line);background:var(--panel);padding:12px 10px;overflow:auto;max-height:calc(100vh - 56px);position:sticky;top:56px}
+nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:12px 10px 4px;font-weight:600}
+nav button{display:flex;width:100%;text-align:left;gap:10px;align-items:flex-start;background:none;border:0;color:var(--ink);padding:7px 10px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px}
+nav button:hover{background:var(--chip)}
+nav button.active{background:var(--chip);font-weight:600}
+nav .num{flex:0 0 24px;height:22px;border-radius:11px;display:grid;place-items:center;font-size:11.5px;background:var(--line);color:var(--ink)}
+nav .num.pass{background:var(--ok);color:#fff}
+nav .num.fail{background:var(--bad);color:#fff}
+nav .tools{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.mobile-nav{display:none}
+.mobile-nav select{width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+main{padding:22px 28px 60px;max-width:1050px}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.chip{background:var(--chip);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--muted)}
+h2{margin:4px 0 12px;font-size:22px}
+.scenario{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.scenario p{margin:0 0 8px}.scenario p:last-child{margin:0}
+.scenario ol,.scenario ul{margin:6px 0 8px;padding-left:22px}
+pre.log{background:var(--code-bg);color:var(--code-ink);padding:14px;border-radius:8px;overflow:auto;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:10px 0 0;white-space:pre}
+.task{font-weight:600;margin:0 0 10px}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--chip)}
+tr:last-child td{border-bottom:0}
+td.lbl{font-weight:500;min-width:180px}
+select,input[type=text]{width:100%;min-width:110px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
+select.ok,input.ok{border-color:var(--ok);background:var(--ok-bg)}
+select.bad,input.bad{border-color:var(--bad);background:var(--bad-bg)}
+.why{display:none;font-size:13px;color:var(--muted);margin-top:6px;font-weight:400}
+.reveal .why{display:block}
+.correct{display:none;font-size:12.5px;color:var(--ok);margin-top:4px;font-weight:600}
+.reveal .correct{display:block}
+.order,.multi{list-style:none;padding:0;margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.order li,.multi li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.order li:last-child,.multi li:last-child{border-bottom:0}
+.order .pos{width:24px;height:24px;border-radius:6px;background:var(--chip);display:grid;place-items:center;font-size:12px;font-weight:600;flex:0 0 24px}
+.order li.ok,.multi li.ok{background:var(--ok-bg)}.order li.bad,.multi li.bad{background:var(--bad-bg)}
+.order .txt,.multi .txt{flex:1}
+.order .mv{display:flex;gap:4px}
+.order .mv button{width:30px;height:28px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;cursor:pointer;font-size:14px}
+.order .mv button:disabled{opacity:.35;cursor:default}
+.multi label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;flex:1}
+.multi input{margin-top:4px;width:17px;height:17px}
+.fb{font-size:13px;color:var(--muted);margin-top:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 10px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 16px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:hover{filter:brightness(.97)}
+.timer{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.result{padding:12px 14px;border-radius:8px;margin-top:6px;display:none}
+.result.show{display:block}
+.result.pass{background:var(--ok-bg);color:var(--ok)}
+.result.fail{background:var(--bad-bg);color:var(--bad)}
+.explain{display:none;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin-top:12px}
+.reveal .explain{display:block}
+.tip{font-size:13px;color:var(--muted);margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+.err{background:var(--bad-bg);color:var(--bad);padding:14px;border-radius:8px}
+@media (max-width:820px){
+  .wrap{grid-template-columns:1fr}
+  nav{display:none}
+  .mobile-nav{display:block;margin-bottom:14px}
+  main{padding:16px}
+  header .sub{display:none}
+  table,thead,tbody,tr,td,th{display:block}
+  thead{display:none}
+  tr{border-bottom:1px solid var(--line);padding:8px 0}
+  td{border:0;padding:5px 12px}
+  td[data-h]::before{content:attr(data-h);display:block;font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+}
+</style>
+<script>
+// Question registry. Each file in /questions calls PBQ.add([...]).
+window.PBQ = { bank: [], add(list){ for (const q of list) this.bank.push(q); } };
+</script>
+<!-- Question bank: one file per exam domain. Add new files here. -->
+<script src="questions/d1-general-concepts.js"></script>
+<script src="questions/d2-threats.js"></script>
+<script src="questions/d3-architecture.js"></script>
+<script src="questions/d4-operations.js"></script>
+<script src="questions/d5-program-management.js"></script>
+</head>
+<body>
+<header>
+  <h1>Security+ PBQ Practice Lab</h1>
+  <span class="sub">SY0-701 performance-based question simulations</span>
+  <span class="score" id="score"></span>
+</header>
+<div class="wrap">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<script>
+const DOMAINS = {1:"1.0 General Security Concepts",2:"2.0 Threats, Vulnerabilities & Mitigations",3:"3.0 Security Architecture",4:"4.0 Security Operations",5:"5.0 Program Management & Oversight"};
+const Q = [...PBQ.bank].sort((a,b)=>a.domain-b.domain);
+const store = {get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let status = store.get("pbq-status",{});
+let cur = 0, timerStart = 0, timerId = null, orderState = [], multiOrder = [];
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuffle = a => {a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+
+function renderNav(){
+  const pass = Q.filter(q=>status[q.id]==="pass").length;
+  $("#score").textContent = `${pass} / ${Q.length} passed`;
+  let html="", last=0;
+  Q.forEach((q,i)=>{
+    if(q.domain!==last){ html+=`<div class="grp">${esc(DOMAINS[q.domain])}</div>`; last=q.domain; }
+    html+=`<button class="${i===cur?"active":""}" data-go="${i}"><span class="num ${status[q.id]||""}">${i+1}</span><span>${esc(q.title)}</span></button>`;
+  });
+  html += `<div class="tools"><button data-act="random">🎲 Random question</button><button data-act="unpassed">➜ Next not yet passed</button><button data-act="resetall">↺ Reset progress</button></div>`;
+  $("#nav").innerHTML = html;
+}
+function go(i){cur=i;render();window.scrollTo(0,0);try{history.replaceState(null,"","#"+Q[i].id)}catch(e){}}
+function randomQ(){let i;do{i=Math.floor(Math.random()*Q.length)}while(i===cur&&Q.length>1);go(i)}
+function nextUnpassed(){for(let k=1;k<=Q.length;k++){const i=(cur+k)%Q.length;if(status[Q[i].id]!=="pass")return go(i)}}
+
+function cellOpts(q,ri,ci){
+  if(q.rowOpts && q.rowOpts[ri]) return q.rowOpts[ri];
+  return q.opts[ci];
+}
+
+function render(){
+  renderNav();
+  const q = Q[cur];
+  const type = q.type||"grid";
+  let body = "";
+  if(type==="order"){
+    orderState = shuffle(q.items.map((_,i)=>i));
+    while(orderState.every((v,i)=>v===i)) orderState = shuffle(orderState);
+    body = `<ul class="order" id="order"></ul>`;
+  } else if(type==="multi"){
+    multiOrder = shuffle(q.choices.map((_,i)=>i));
+    body = `<ul class="multi">`+multiOrder.map(i=>{const c=q.choices[i];return `<li id="m${i}"><label><input type="checkbox" value="${i}"><span class="txt">${esc(c.t)}<div class="why">${c.c?"✓ Correct — ":"✗ Not correct — "}${esc(c.w)}</div></span></label></li>`}).join("")+`</ul>`;
+  } else {
+    body = `<table><thead><tr><th>Item</th>${q.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`+
+    q.rows.map((r,ri)=>`<tr><td class="lbl">${esc(r.l)}<div class="why">${esc(r.w||"")}</div></td>`+
+      r.a.map((a,ci)=>{
+        const opts = cellOpts(q,ri,ci);
+        const ctl = !opts
+          ? `<input type="text" inputmode="decimal" id="c${ri}_${ci}" placeholder="Enter value">`
+          : `<select id="c${ri}_${ci}"><option value="">— select —</option>${opts.map(o=>`<option>${esc(o)}</option>`).join("")}</select>`;
+        return `<td data-h="${esc(q.cols[ci])}">${ctl}<div class="correct">✓ ${esc(a)}</div></td>`;
+      }).join("")+`</tr>`).join("")+`</tbody></table>`;
+  }
+  $("#main").innerHTML = `
+   <div class="mobile-nav"><select id="mnav">${Q.map((x,i)=>`<option value="${i}" ${i===cur?"selected":""}>${i+1}. ${esc(x.title)} ${status[x.id]==="pass"?"✓":status[x.id]==="fail"?"✗":""}</option>`).join("")}</select></div>
+   <div class="meta"><span class="chip">PBQ ${cur+1} of ${Q.length}</span><span class="chip">${esc(DOMAINS[q.domain])}</span><span class="chip">Target: ~${q.time||3} min</span></div>
+   <h2>${esc(q.title)}</h2>
+   <div class="scenario">${q.scenario}${q.log?`<pre class="log">${esc(q.log)}</pre>`:""}</div>
+   <p class="task">${esc(q.task)}</p>
+   <div id="work">${body}<div class="explain"><b>Key takeaway:</b> ${esc(q.explain)}</div></div>
+   <div class="actions">
+     <button class="btn primary" data-act="check">Check answers</button>
+     <button class="btn" data-act="reveal">Show answers</button>
+     <button class="btn" data-act="reset">Reset</button>
+     <button class="btn" data-act="next">Next →</button>
+     <span class="timer" id="timer">0:00</span>
+   </div>
+   <div class="result" id="result"></div>
+   <p class="tip">Exam tip: performance-based questions come first. On the real exam, flag them, finish the multiple choice, then come back. Partial credit is generally believed to apply, so fill in every field.</p>`;
+  if(type==="order") drawOrder();
+  clearInterval(timerId); timerStart=Date.now();
+  timerId=setInterval(()=>{const s=Math.floor((Date.now()-timerStart)/1000);const t=$("#timer");if(t){t.textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;t.style.color=s>(q.time||3)*60?"var(--bad)":""}},1000);
+}
+
+function drawOrder(marks){
+  const q=Q[cur];
+  $("#order").innerHTML = orderState.map((idx,pos)=>{
+    let fb="";
+    if(marks){ fb = `<div class="fb">${marks[pos]?"✓":"Belongs at position "+(idx+1)+"."}${q.labels?" "+esc(q.labels[idx]):""}</div>`; }
+    return `<li class="${marks?(marks[pos]?"ok":"bad"):""}"><span class="pos">${pos+1}</span><span class="txt">${esc(q.items[idx])}${fb}</span><span class="mv"><button aria-label="Move up" ${pos===0?"disabled":""} data-mv="${pos},-1">↑</button><button aria-label="Move down" ${pos===orderState.length-1?"disabled":""} data-mv="${pos},1">↓</button></span></li>`;
+  }).join("");
+}
+
+function grade(){
+  const q=Q[cur]; const type=q.type||"grid"; let right=0,total=0;
+  if(type==="order"){
+    const marks=orderState.map((v,i)=>v===i); right=marks.filter(Boolean).length; total=marks.length; drawOrder(marks);
+  } else if(type==="multi"){
+    q.choices.forEach((c,i)=>{const li=$("#m"+i);const on=li.querySelector("input").checked;const ok=on===!!c.c;total++;if(ok)right++;li.classList.toggle("ok",ok);li.classList.toggle("bad",!ok)});
+  } else {
+    q.rows.forEach((r,ri)=>r.a.forEach((a,ci)=>{
+      const el=$(`#c${ri}_${ci}`); total++;
+      let ok;
+      if(typeof a==="number"){ const v=parseFloat(el.value.replace(/[$,%\s]/g,"")); ok=!isNaN(v)&&Math.abs(v-a)<=0.001*Math.max(1,Math.abs(a)); }
+      else ok = el.value===a;
+      el.classList.toggle("ok",ok); el.classList.toggle("bad",!ok); if(ok) right++;
+    }));
+  }
+  return {right,total};
+}
+function check(){
+  const q=Q[cur]; const {right,total}=grade(); const pass=right===total;
+  status[q.id]=pass?"pass":"fail"; store.set("pbq-status",status); renderNav();
+  const secs=Math.floor((Date.now()-timerStart)/1000);
+  const r=$("#result"); r.className="result show "+(pass?"pass":"fail");
+  const unit = (q.type==="multi")?"choices judged correctly":"correct";
+  r.innerHTML = pass ? `<b>All ${total} ${unit}</b> in ${Math.floor(secs/60)}m ${secs%60}s.` : `<b>${right} / ${total} ${unit}.</b> Fix the red items and check again, or choose “Show answers” to see the explanations.`;
+  if(pass) $("#work").classList.add("reveal");
+}
+function reveal(){ grade(); $("#work").classList.add("reveal"); }
+
+// Event delegation (no inline handlers)
+document.addEventListener("click",e=>{
+  const g=e.target.closest("[data-go]"); if(g) return go(+g.dataset.go);
+  const m=e.target.closest("[data-mv]"); if(m){const [p,d]=m.dataset.mv.split(",").map(Number);const t=p+d;[orderState[p],orderState[t]]=[orderState[t],orderState[p]];return drawOrder();}
+  const a=e.target.closest("[data-act]"); if(!a) return;
+  ({check, reveal, reset:render, next:()=>go((cur+1)%Q.length), random:randomQ, unpassed:nextUnpassed,
+    resetall:()=>{status={};store.set("pbq-status",status);render()}})[a.dataset.act]();
+});
+document.addEventListener("change",e=>{ if(e.target.id==="mnav") go(+e.target.value); });
+
+if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded. Check that the files in /questions are present.</div>'; }
+else { const h=(location.hash||"").slice(1); const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; render(); }
+</script>
+</body>
+</html>

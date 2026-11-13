@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// Validates every question file in ../questions. Run: node tools/validate.js
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const dir = path.join(__dirname, "..", "questions");
+const index = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+const bank = [];
+const errors = [];
+const err = (q, msg) => errors.push(`[${q && q.id || "?"}] ${msg}`);
+
+const files = fs.readdirSync(dir).filter(f => f.endsWith(".js")).sort();
+for (const f of files) {
+  if (!index.includes(`questions/${f}`)) errors.push(`[${f}] not referenced by a <script src> tag in index.html`);
+  const ctx = { PBQ: { add(list) { for (const q of list) { q.__file = f; bank.push(q); } } } };
+  try { vm.runInNewContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }); }
+  catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
+}
+
+const ids = new Set();
+for (const q of bank) {
+  for (const k of ["id", "domain", "title", "scenario", "task", "explain"]) if (q[k] === undefined || q[k] === "") err(q, `missing "${k}"`);
+  if (ids.has(q.id)) err(q, "duplicate id"); ids.add(q.id);
+  if (!/^[a-z0-9-]+$/.test(q.id || "")) err(q, "id must be lowercase letters, digits and hyphens");
+  if (![1, 2, 3, 4, 5].includes(q.domain)) err(q, "domain must be 1-5");
+  const type = q.type || "grid";
+  if (type === "grid") {
+    if (!Array.isArray(q.cols) || !Array.isArray(q.opts) || q.cols.length !== q.opts.length) { err(q, "cols and opts must be arrays of equal length"); continue; }
+    (q.rows || []).forEach((r, ri) => {
+      if (!r.l) err(q, `row ${ri} missing label "l"`);
+      if (!r.w) err(q, `row ${ri} missing explanation "w"`);
+      if (!Array.isArray(r.a) || r.a.length !== q.cols.length) return err(q, `row ${ri} must have ${q.cols.length} answer(s)`);
+      r.a.forEach((a, ci) => {
+        const opts = (q.rowOpts && q.rowOpts[ri]) || q.opts[ci];
+        if (!opts) { if (typeof a !== "number") err(q, `row ${ri} col ${ci}: free-entry cells need a numeric answer`); }
+        else if (!opts.includes(a)) err(q, `row ${ri} col ${ci}: answer "${a}" is not one of the options`);
+      });
+    });
+    if (!q.rows || q.rows.length < 2) err(q, "grid needs at least 2 rows");
+  } else if (type === "order") {
+    if (!Array.isArray(q.items) || q.items.length < 3) err(q, "order needs at least 3 items (listed in the CORRECT order)");
+    if (q.labels && q.labels.length !== q.items.length) err(q, "labels must match items length");
+  } else if (type === "multi") {
+    if (!Array.isArray(q.choices) || q.choices.length < 4) err(q, "multi needs at least 4 choices");
+    else {
+      const n = q.choices.filter(c => c.c).length;
+      if (!n) err(q, "multi needs at least one correct choice");
+      q.choices.forEach((c, i) => { if (!c.t || !c.w) err(q, `choice ${i} needs "t" and "w"`); });
+      const m = /select the (\w+)/i.exec(q.task || "");
+      const words = { one:1,two:2,three:3,four:4,five:5,six:6,seven:7 };
+      if (m && words[m[1].toLowerCase()] && words[m[1].toLowerCase()] !== n) err(q, `task says ${m[1]} but ${n} choices are correct`);
+    }
+  } else err(q, `unknown type "${type}"`);
+}
+
+const byDomain = [1, 2, 3, 4, 5].map(d => `D${d}: ${bank.filter(q => q.domain === d).length}`).join("  ");
+console.log(`${bank.length} questions loaded from ${files.length} files.  ${byDomain}`);
+if (errors.length) { console.error(`\n${errors.length} problem(s):\n` + errors.map(e => "  - " + e).join("\n")); process.exit(1); }
+console.log("All questions valid.");
