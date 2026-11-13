@@ -16,7 +16,10 @@ questions/
   d3-architecture.js               Domain 3.0 — Security Architecture
   d4-operations.js                 Domain 4.0 — Security Operations
   d5-program-management.js         Domain 5.0 — Security Program Management & Oversight
-tools/validate.js                  Checks every question for mistakes
+  set2.js                          Second PBQ set (mixed domains)
+mcq/
+  d1-…d5-….js                      Multiple-choice questions, one file per domain
+tools/validate.js                  Checks every PBQ and MC question for mistakes
 ```
 
 The engine sorts questions by domain automatically. To add a question, you only touch a file in `questions/`.
@@ -88,6 +91,35 @@ List `items` in the **correct** order. The page shuffles them.
   ],
   explain: "..." }
 ```
+
+## Multiple-choice questions
+
+Multiple-choice questions live in `mcq/`, one file per domain. Each file calls `PBQ.addMC(domain, [...])`:
+
+```js
+PBQ.addMC(4, [
+  { id: "d4-045",
+    q: "Which tool aggregates and correlates logs from many sources?",
+    o: ["SIEM", "SOAR", "FIM", "DLP"],    // options (shuffled when shown)
+    a: 0,                                 // index of the correct option
+    e: "A SIEM collects, correlates and alerts. SOAR automates the response." },
+  { id: "d4-046",
+    q: "Which TWO are possession factors? (Choose two.)",
+    o: ["Security key", "TOTP app", "PIN", "Fingerprint"],
+    a: [0, 1],                            // array = choose-N; the text must say "(Choose two.)"
+    e: "..." }
+]);
+```
+
+- IDs must be unique across the whole bank. Use the `d<domain>-<number>` pattern.
+- Options are shuffled every time a question is shown, so don't use "all of the above" or "none of the above." The validator rejects them.
+- Write `e` so it explains the right answer **and** why the tempting wrong answers are wrong.
+
+The page offers two modes: **Study** (feedback after each question) and **Exam sim** (1 min per question, results at the end with a full review). It can draw from four pools: all, not seen yet, missed last time, and below 70% accuracy. Stats are kept per question in the browser.
+
+### Suggested weighting
+
+Match the SY0-701 domain weights when you add questions: D1 12%, D2 22%, D3 18%, D4 28%, D5 20%.
 
 ## Writing good PBQs
 
