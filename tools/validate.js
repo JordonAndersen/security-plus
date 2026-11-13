@@ -24,6 +24,7 @@ for (const q of bank) {
   if (ids.has(q.id)) err(q, "duplicate id"); ids.add(q.id);
   if (!/^[a-z0-9-]+$/.test(q.id || "")) err(q, "id must be lowercase letters, digits and hyphens");
   if (![1, 2, 3, 4, 5].includes(q.domain)) err(q, "domain must be 1-5");
+  if (q.level !== undefined && !["easy","medium","hard"].includes(q.level)) err(q, 'level must be "easy", "medium" or "hard"');
   const type = q.type || "grid";
   if (type === "grid") {
     if (!Array.isArray(q.cols) || !Array.isArray(q.opts) || q.cols.length !== q.opts.length) { err(q, "cols and opts must be arrays of equal length"); continue; }
@@ -73,6 +74,7 @@ for (const q of mc) {
   if (mids.has(q.id) || ids.has(q.id)) err(q, "duplicate id"); mids.add(q.id);
   if (![1, 2, 3, 4, 5].includes(q.domain)) err(q, "domain must be 1-5");
   if (!q.q || !q.e) err(q, 'needs question "q" and explanation "e"');
+  if (q.level !== undefined && !["easy","medium","hard"].includes(q.level)) err(q, 'level must be "easy", "medium" or "hard"');
   if (texts.has(q.q)) err(q, "duplicate question text"); texts.add(q.q);
   if (!Array.isArray(q.o) || q.o.length < 3) { err(q, "needs at least 3 options in o"); continue; }
   if (new Set(q.o).size !== q.o.length) err(q, "duplicate options");
@@ -85,6 +87,8 @@ for (const q of mc) {
   if (q.o.some(o => /all of the above|none of the above/i.test(o))) err(q, "avoid 'all/none of the above' — options are shuffled");
 }
 const mcDom = [1, 2, 3, 4, 5].map(d => `D${d}: ${mc.filter(q => q.domain === d).length}`).join("  ");
+const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (q.level||"medium") === l).length}`).join(", ");
+console.log(`Levels — PBQ ${lv(bank)} | MC ${lv(mc)}`);
 console.log(`MC:  ${mc.length} questions from ${mfiles.length} files.  ${mcDom}`);
 if (errors.length) { console.error(`\n${errors.length} problem(s):\n` + errors.map(e => "  - " + e).join("\n")); process.exit(1); }
 console.log("All questions valid.");

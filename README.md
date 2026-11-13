@@ -117,6 +117,22 @@ PBQ.addMC(4, [
 
 The page offers two modes: **Study** (feedback after each question) and **Exam sim** (1 min per question, results at the end with a full review). It can draw from four pools: all, not seen yet, missed last time, and below 70% accuracy. Stats are kept per question in the browser.
 
+## Difficulty levels
+
+Any PBQ or multiple-choice question can carry `level: "easy" | "medium" | "hard"`. Untagged questions count as medium.
+
+- **Performance-based tab:** a difficulty dropdown at the top of the sidebar. Hard questions also show a HARD tag in the list.
+- **Multiple-choice tab:** difficulty checkboxes with your accuracy per level, plus a one-click **Hard only — cram mode** button.
+- **Practice exam tab:** a **Hard-weighted** option draws every available hard question in each domain first, then tops up from the rest.
+
+Hard files: `questions/hard-set.js`, `mcq/hard-d1-d2.js`, and `mcq/hard-d3-d5.js`. Those multiple-choice files wrap their lists in a small `H()` helper that sets `level: "hard"` on every question.
+
+What makes a question "hard" here:
+- **Look-alike concepts**, where one detail decides the answer (BEC vs. whaling, CSRF vs. SSRF, pharming vs. DNS poisoning, MOU vs. MOA).
+- **BEST, FIRST, or MOST questions** where several options are true but only one fits the scenario.
+- **Distractors that sound like security but aren't current best practice**, such as 30-day password rotation, SSID hiding, or lowering the lockout threshold to stop spraying.
+- **Multi-step reasoning**, such as tracing firewall rules, ALE with control cost, DMARC alignment, or reading CVSS vectors.
+
 ## Practice exam tab
 
 This builds a random exam from both banks each time:
