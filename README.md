@@ -133,6 +133,19 @@ What makes a question "hard" here:
 - **Distractors that sound like security but aren't current best practice**, such as 30-day password rotation, SSID hiding, or lowering the lockout threshold to stop spraying.
 - **Multi-step reasoning**, such as tracing firewall rules, ALE with control cost, DMARC alignment, or reading CVSS vectors.
 
+## Acronyms & ports tab
+
+Reference data lives in `ref/`:
+
+- `ref/acronyms-a-l.js` and `ref/acronyms-m-z.js` — `PBQ.addAcronyms([{ a, f, c, d, t?, k? }])`
+  - `a` acronym. When one acronym has several meanings, make it unique, e.g. `MAC (access)`, `MAC (address)`.
+  - `f` full name, `c` category (Crypto, Identity, Network, Wireless, Threats, Ops, Cloud, Hardware, Resilience, GRC, Dev)
+  - `d` what it is / what it does, `t` optional exam tip, `k: 1` marks it high-yield.
+- `ref/ports.js` — `PBQ.addPorts([{ p, pr, s, d, sec, bad?, k? }])`
+  - `p` port(s), `pr` TCP/UDP, `s` service, `d` what it does, `sec` secure alternative or note, `bad: 1` for cleartext/insecure.
+
+The tab has three views. **Acronyms** has live search, a category filter, and a high-yield toggle. **Ports** is a searchable table with an insecure-only filter. **Flashcards** offers high-yield, all, or per-category acronym decks, plus port→service and service→port decks, with mastered/missed tracking (keyboard: Space, 1, 2). The validator checks for duplicate acronyms and ports and for unknown categories.
+
 ## Practice exam tab
 
 This builds a random exam from both banks each time:

@@ -90,5 +90,29 @@ const mcDom = [1, 2, 3, 4, 5].map(d => `D${d}: ${mc.filter(q => q.domain === d).
 const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (q.level||"medium") === l).length}`).join(", ");
 console.log(`Levels — PBQ ${lv(bank)} | MC ${lv(mc)}`);
 console.log(`MC:  ${mc.length} questions from ${mfiles.length} files.  ${mcDom}`);
+// ---- Reference data (acronyms + ports) ----
+const rdir = path.join(__dirname, "..", "ref");
+const acr = [], ports = [];
+const rfiles = fs.existsSync(rdir) ? fs.readdirSync(rdir).filter(f => f.endsWith(".js")).sort() : [];
+for (const f of rfiles) {
+  if (!index.includes(`ref/${f}`)) errors.push(`[${f}] not referenced by a <script src> tag in index.html`);
+  const ctx = { PBQ: { addAcronyms(l) { acr.push(...l); }, addPorts(l) { ports.push(...l); } } };
+  try { vm.runInNewContext(fs.readFileSync(path.join(rdir, f), "utf8"), ctx, { filename: f }); }
+  catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
+}
+const CATS = ["Crypto","Identity","Network","Wireless","Threats","Ops","Cloud","Hardware","Resilience","GRC","Dev"];
+const seenA = new Set();
+for (const x of acr) {
+  if (!x.a || !x.f || !x.d || !x.c) errors.push(`[acronym ${x.a || "?"}] needs a, f, c and d`);
+  if (seenA.has(x.a)) errors.push(`[acronym ${x.a}] duplicate — disambiguate like "MAC (access)"`); seenA.add(x.a);
+  if (x.c && !CATS.includes(x.c)) errors.push(`[acronym ${x.a}] unknown category "${x.c}" (use one of ${CATS.join(", ")})`);
+}
+const seenP = new Set();
+for (const x of ports) {
+  if (!x.p || !x.pr || !x.s || !x.d || !x.sec) errors.push(`[port ${x.p || "?"}] needs p, pr, s, d and sec`);
+  if (seenP.has(x.p)) errors.push(`[port ${x.p}] duplicate`); seenP.add(x.p);
+}
+console.log(`Ref: ${acr.length} acronyms (${acr.filter(x => x.k).length} high-yield), ${ports.length} ports`);
+
 if (errors.length) { console.error(`\n${errors.length} problem(s):\n` + errors.map(e => "  - " + e).join("\n")); process.exit(1); }
 console.log("All questions valid.");
