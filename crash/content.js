@@ -2,6 +2,53 @@
 // Jump buttons: <button class="btn" data-cc="ACTION">…</button>, where ACTION is one of:
 //   mcq-hard, mcq-missed, mcq-d1..mcq-d5, pbq-hard, exam, exam-hard, ref-acr-cards, ref-port-cards, ref-ports
 PBQ.addCrash([
+{ id:"retake", group:"Start here", title:"Retake plan (December)", html:`
+<p><b>Where you stand:</b> 23 points short on a 100–900 scale is a few multiple-choice questions plus partial credit on one or two PBQs. You don't need to relearn Security+. You need to close specific gaps: <b>acronym recognition</b> and <b>hands-on PBQs</b> (command line, log triage, network build, document review).</p>
+<p><b>Use your score report.</b> It lists the objectives where you were weakest. Note those domains and drill them first with the domain filters.</p>
+<h3>4-week plan (adjust the dates to your booking)</h3>
+<table class="cc">
+<tr><th>Week 1 — Acronyms + CLI basics</th><td>Daily: 20-question acronym quiz (high-yield, then "missed"). Read the <i>Command-line cheat sheet</i>. Work all 5 CLI PBQs until you can solve each one in under 7 minutes without hints.
+<div class="ccbtns"><button class="btn" data-cc="ref-acr-quiz">Acronym quiz</button><button class="btn" data-cc="pbq-hard">Hard PBQs</button></div></td></tr>
+<tr><th>Week 2 — Weak domains</th><td>Multiple choice in Study mode, filtered to your 2 weakest domains from the score report. Read every explanation. Re-run the "Missed last time" pool every other day.
+<div class="ccbtns"><button class="btn" data-cc="mcq-missed">Missed questions</button></div></td></tr>
+<tr><th>Week 3 — PBQ fluency</th><td>Every PBQ in the bank, especially log triage, network build and document review. Time each one. Re-read <i>How to work a PBQ</i> and <i>Decision guides</i>.</td></tr>
+<tr><th>Week 4 — Exam simulation</th><td>Three full practice exams (one Hard-weighted). Target an 800+ estimate on each. Between exams, only drill what the results flag. Two days before: acronym quiz on "all", then <i>Commonly confused pairs</i>.
+<div class="ccbtns"><button class="btn" data-cc="exam">Practice exam</button><button class="btn" data-cc="exam-hard">Hard-weighted exam</button></div></td></tr>
+</table>
+<h3>Daily minimum (even on busy days)</h3>
+<ul><li>10 minutes of acronym quiz</li><li>1 PBQ</li><li>15 multiple-choice questions in Study mode</li></ul>
+<p class="muted">CompTIA's published retake policy has no waiting period between a first and second attempt (14 days applies before a third). Confirm the current policy when you book.</p>`},
+
+{ id:"cli", group:"How to think", title:"Command-line cheat sheet", html:`
+<p>CLI PBQs expect you to know which command answers which question. You don't need flags memorized perfectly, but you do need to know what each tool shows.</p>
+<table class="cc">
+<tr><th>Question you're answering</th><td><b>Windows</b> &nbsp;|&nbsp; <b>Linux</b></td></tr>
+<tr><th>What's connected / listening, and which process?</th><td><code>netstat -ano</code> (PID column) &nbsp;|&nbsp; <code>ss -tunap</code> or <code>netstat -tulpn</code></td></tr>
+<tr><th>What processes are running?</th><td><code>tasklist</code>, <code>tasklist /svc</code> &nbsp;|&nbsp; <code>ps aux</code>, <code>top</code></td></tr>
+<tr><th>Where does a process run from?</th><td><code>wmic process where processid=N get executablepath</code> / Task Manager → Details &nbsp;|&nbsp; <code>ls -l /proc/N/exe</code>, <code>ps -ef</code></td></tr>
+<tr><th>Stop a process</th><td><code>taskkill /PID N /F</code> &nbsp;|&nbsp; <code>kill -9 N</code></td></tr>
+<tr><th>Persistence locations</th><td>Run keys (<code>reg query HKCU\\...\\Run</code>, HKLM too), <code>schtasks /query</code>, services (<code>sc query</code>), Startup folder &nbsp;|&nbsp; <code>crontab -l</code> (per user), <code>/etc/cron*</code>, systemd units, <code>~/.ssh/authorized_keys</code>, new UID 0 users in <code>/etc/passwd</code></td></tr>
+<tr><th>IP config, DNS server, DHCP server</th><td><code>ipconfig /all</code> &nbsp;|&nbsp; <code>ip a</code>, <code>ifconfig</code>, <code>cat /etc/resolv.conf</code></td></tr>
+<tr><th>IP ↔ MAC mapping (ARP poisoning)</th><td><code>arp -a</code> &nbsp;|&nbsp; <code>arp -a</code>, <code>ip neigh</code></td></tr>
+<tr><th>Name resolution / compare DNS servers</th><td><code>nslookup name [server]</code> &nbsp;|&nbsp; <code>dig name @server</code>, <code>nslookup</code></td></tr>
+<tr><th>Path to a destination</th><td><code>tracert</code> &nbsp;|&nbsp; <code>traceroute</code></td></tr>
+<tr><th>Reachability</th><td><code>ping</code> &nbsp;|&nbsp; <code>ping</code></td></tr>
+<tr><th>Local redirect (pharming)</th><td><code>type C:\\Windows\\System32\\drivers\\etc\\hosts</code> &nbsp;|&nbsp; <code>cat /etc/hosts</code></td></tr>
+<tr><th>Login history / failed logins</th><td>Event Viewer: Security log 4624 (success) / 4625 (failure) &nbsp;|&nbsp; <code>last</code>, <code>lastb</code>, <code>/var/log/auth.log</code> (Debian/Ubuntu) or <code>/var/log/secure</code> (RHEL)</td></tr>
+<tr><th>Search logs</th><td><code>findstr</code>, PowerShell <code>Select-String</code> &nbsp;|&nbsp; <code>grep</code>, <code>tail -f</code>, <code>cat</code>, <code>head</code></td></tr>
+<tr><th>File hash</th><td><code>Get-FileHash</code>, <code>certutil -hashfile f SHA256</code> &nbsp;|&nbsp; <code>sha256sum</code></td></tr>
+<tr><th>Permissions</th><td><code>icacls</code> &nbsp;|&nbsp; <code>ls -l</code>, <code>chmod</code>, <code>chown</code></td></tr>
+<tr><th>Port scan / service discovery (attacker or auditor)</th><td colspan="1"><code>nmap</code> (both). Packet capture: <code>tcpdump</code> / Wireshark. Banner grab or raw connections: <code>nc</code> (netcat), <code>curl</code>.</td></tr>
+</table>
+<h3>Investigation order that works on any CLI PBQ</h3>
+<ol class="steps">
+<li><b>Connections first</b> (netstat/ss). Look for unknown external IPs and odd ports (4444, 31337, high random ports), and note the PID.</li>
+<li><b>Process</b> (tasklist/ps). Look for a legitimate name in the wrong path (svchost.exe outside System32, "kworkerd" in /tmp), high CPU, or the wrong user.</li>
+<li><b>Persistence</b>: Run keys, scheduled tasks, services / cron, systemd, authorized_keys, new accounts.</li>
+<li><b>Logs</b> to find the entry point and the attacker IP. The C2 IP is often a different IP from the initial attacker.</li>
+<li><b>Remediate</b>: kill the process, remove the binary AND the persistence AND the entry point (for example a web shell), then fix the root cause.</li>
+</ol>
+<div class="ccbtns"><button class="btn primary" data-cc="pbq-hard">Practice CLI PBQs</button></div>`},
 { id:"plan", group:"Start here", title:"48-hour cram plan", html:`
 <p>You don't have time to relearn everything, so spend it where points are most often lost. Work through this plan in order.</p>
 <ol class="steps">

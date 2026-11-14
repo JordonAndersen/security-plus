@@ -69,6 +69,23 @@ Used for firewall rules, matching, classification, and calculations.
 - Each `a` value must exactly match one of the options for that cell.
 - Numeric free-entry cells (`opts` column = `null`) take a number answer. Grading ignores `$`, `,`, `%`, and spaces.
 
+### Command-line PBQs (simulated terminal)
+
+Any grid PBQ can include an interactive terminal that appears above the answer table:
+
+```js
+term: {
+  prompt: "root@web01:~#",
+  intro: "Type 'help' to list available commands.",
+  cmds: {
+    "ss -tunap|netstat -tunap": "…output…",   // aliases separated by |
+    "ps aux": "…output…"
+  }
+}
+```
+
+Matching ignores case and extra spaces. `help` lists the commands (first alias of each), `clear`/`cls` clears the screen, and ↑/↓ recall history. Unknown commands print a hint. Use RFC 5737 documentation IPs (192.0.2.x, 198.51.100.x, 203.0.113.x) and fictional hostnames.
+
 ### Type: `order` (put steps in sequence)
 
 List `items` in the **correct** order. The page shuffles them.
@@ -144,7 +161,9 @@ Reference data lives in `ref/`:
 - `ref/ports.js` — `PBQ.addPorts([{ p, pr, s, d, sec, bad?, k? }])`
   - `p` port(s), `pr` TCP/UDP, `s` service, `d` what it does, `sec` secure alternative or note, `bad: 1` for cleartext/insecure.
 
-The tab has three views. **Acronyms** has live search, a category filter, and a high-yield toggle. **Ports** is a searchable table with an insecure-only filter. **Flashcards** offers high-yield, all, or per-category acronym decks, plus port→service and service→port decks, with mastered/missed tracking (keyboard: Space, 1, 2). The validator checks for duplicate acronyms and ports and for unknown categories.
+The tab has four views. **Acronym quiz** auto-generates multiple choice from the reference data (acronym → name, name → acronym, or description → acronym), with distractors drawn from the same category.
+
+The other three: **Acronyms** has live search, a category filter, and a high-yield toggle. **Ports** is a searchable table with an insecure-only filter. **Flashcards** offers high-yield, all, or per-category acronym decks, plus port→service and service→port decks, with mastered/missed tracking (keyboard: Space, 1, 2). The validator checks for duplicate acronyms and ports and for unknown categories.
 
 ## Crash course tab
 

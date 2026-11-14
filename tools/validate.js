@@ -25,6 +25,10 @@ for (const q of bank) {
   if (!/^[a-z0-9-]+$/.test(q.id || "")) err(q, "id must be lowercase letters, digits and hyphens");
   if (![1, 2, 3, 4, 5].includes(q.domain)) err(q, "domain must be 1-5");
   if (q.level !== undefined && !["easy","medium","hard"].includes(q.level)) err(q, 'level must be "easy", "medium" or "hard"');
+  if (q.term !== undefined) {
+    if (!q.term || typeof q.term.cmds !== "object" || !Object.keys(q.term.cmds).length) err(q, "term needs a non-empty cmds object");
+    else for (const [k, v] of Object.entries(q.term.cmds)) if (typeof v !== "string") err(q, `term command "${k}" output must be a string`);
+  }
   const type = q.type || "grid";
   if (type === "grid") {
     if (!Array.isArray(q.cols) || !Array.isArray(q.opts) || q.cols.length !== q.opts.length) { err(q, "cols and opts must be arrays of equal length"); continue; }
@@ -122,7 +126,7 @@ for (const f of cfiles) {
   try { vm.runInNewContext(fs.readFileSync(path.join(cdir, f), "utf8"), ctx, { filename: f }); }
   catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
 }
-const JUMPS = ["mcq-hard","mcq-missed","mcq-d1","mcq-d2","mcq-d3","mcq-d4","mcq-d5","pbq-hard","exam","exam-hard","ref-acr-cards","ref-port-cards","ref-ports"];
+const JUMPS = ["mcq-hard","mcq-missed","mcq-d1","mcq-d2","mcq-d3","mcq-d4","mcq-d5","pbq-hard","exam","exam-hard","ref-acr-cards","ref-port-cards","ref-ports","ref-acr-quiz"];
 const cids = new Set();
 for (const s of crash) {
   if (!s.id || !s.title || !s.group || !s.html) errors.push(`[crash ${s.id || "?"}] needs id, group, title, html`);
