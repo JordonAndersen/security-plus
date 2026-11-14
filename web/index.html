@@ -19,7 +19,8 @@ body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif
 header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
 header h1{font-size:17px;margin:0;font-weight:650;white-space:nowrap}
 header .score{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-@media (max-width:1100px){header{flex-wrap:wrap}header .score{margin-left:0;order:3;width:100%}}
+@media (max-width:1440px){header{flex-wrap:wrap;row-gap:10px;position:static}header .tabs{order:3;width:100%}nav{top:0;max-height:100vh}.refbar{top:0}}
+@media (max-width:700px){header .score{display:none}}
 header .sub{color:var(--muted);font-size:13px}
 header .score{margin-left:auto;font-size:13px;color:var(--muted)}
 .wrap{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 56px)}
@@ -117,6 +118,20 @@ select.bad,input.bad{border-color:var(--bad);background:var(--bad-bg)}
 .review{border-top:1px solid var(--line);padding:12px 0}
 .review .yours{font-size:13px}
 .muted{color:var(--muted);font-size:13px}
+.acct{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.acct-btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}.dot-ok{background:var(--ok)}.dot-err{background:var(--bad)}.dot-sync{background:#c98a00}
+.countdown{white-space:nowrap}
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,20,.45);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px;z-index:50;overflow:auto}
+.modal{background:var(--panel);color:var(--ink);border-radius:14px;padding:22px 24px;width:100%;max-width:440px;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h3{margin:0 0 8px}.modal hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+.modal .f{display:block;margin:10px 0}.modal .f span{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.modal input:not([type=file]){width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+.mrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.mclose{position:absolute;top:8px;right:10px;border:0;background:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1}
+.merr{margin-top:10px;font-size:13.5px;color:var(--bad)}.merr.ok{color:var(--ok)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 40px 10px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:60}
+.toast .mclose{top:6px}
 .lvlfilter{display:flex;align-items:center;gap:8px;padding:4px 10px 8px}
 .lvlfilter select{flex:1;min-width:0}
 .hardtag{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--bad);border:1px solid var(--bad);border-radius:4px;padding:0 4px;margin-left:2px;vertical-align:1px}
@@ -214,6 +229,7 @@ window.PBQ = {
   <h1>Security+ PBQ Practice Lab</h1>
   <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button></span>
   <span class="score" id="score"></span>
+  <span class="acct" id="acct"></span>
 </header>
 <div class="wrap">
   <nav id="nav"></nav>
@@ -222,7 +238,15 @@ window.PBQ = {
 <script>
 const DOMAINS = {1:"1.0 General Security Concepts",2:"2.0 Threats, Vulnerabilities & Mitigations",3:"3.0 Security Architecture",4:"4.0 Security Operations",5:"5.0 Program Management & Oversight"};
 const Q = [...PBQ.bank].sort((a,b)=>a.domain-b.domain);
-const store = {get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+// Browser storage, namespaced with "sp:" (older un-prefixed keys are migrated on first read).
+// Every write also notifies the cloud layer (app/cloud.js), which syncs it when signed in.
+const STORE_PREFIX = "sp:";
+const store = {
+  get(k,d){ try{ let r=localStorage.getItem(STORE_PREFIX+k);
+      if(r===null){ const old=localStorage.getItem(k); if(old!==null){ localStorage.setItem(STORE_PREFIX+k,old); localStorage.removeItem(k); r=old; } }
+      return r===null ? d : (JSON.parse(r) ?? d); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(STORE_PREFIX+k,JSON.stringify(v)); }catch(e){} if(window.CLOUD) CLOUD.changed(k,v); }
+};
 let status = store.get("pbq-status",{});
 let cur = 0, timerStart = 0, timerId = null, orderState = [], multiOrder = [];
 const $ = s => document.querySelector(s);
@@ -369,6 +393,7 @@ function grade(){
 function check(){
   const q=Q[cur]; const {right,total}=grade(); const pass=right===total;
   status[q.id]=pass?"pass":"fail"; store.set("pbq-status",status); renderNav();
+  window.CLOUD&&CLOUD.log({question_id:q.id, kind:"pbq", domain:q.domain, level:lvl(q), correct:pass, score:total?+(right/total).toFixed(3):0, source:"pbq"});
   const secs=Math.floor((Date.now()-timerStart)/1000);
   const r=$("#result"); r.className="result show "+(pass?"pass":"fail");
   const unit = (q.type==="multi")?"choices judged correctly":"correct";
@@ -503,7 +528,8 @@ const MC = (() => {
   }
 
   function readSel(){ const it=S.items[S.i]; it.sel=[...document.querySelectorAll('input[name=mcopt]:checked')].map(x=>+x.value); }
-  function record(it){ const ok=same(it.sel,correctSet(it.q)); const t=stats[it.q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[it.q.id]=t; return ok; }
+  function record(it){ const ok=same(it.sel,correctSet(it.q)); const t=stats[it.q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[it.q.id]=t;
+    window.CLOUD&&CLOUD.log({question_id:it.q.id, kind:"mc", domain:it.q.domain, level:lvl(it.q), correct:ok, score:ok?1:0, source:S.mode==="exam"?"exam":"study"}); return ok; }
 
   function finish(){
     clearInterval(tick);
@@ -552,7 +578,8 @@ const MC = (() => {
     store.set("mcq-prefs",prefs); info();
   });
   // Lets the practice exam record results into the same per-question stats
-  function rec(q, ok){ const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats(); }
+  function rec(q, ok){ const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats();
+    window.CLOUD&&CLOUD.log({question_id:q.id, kind:"mc", domain:q.domain, level:lvl(q), correct:ok, score:ok?1:0, source:"exam"}); }
   function preset(o){ Object.assign(prefs, o); store.set("mcq-prefs", prefs); }
   return { home, rec, same, correctSet, preset };
 })();
@@ -681,10 +708,12 @@ const EX = (() => {
     const secs=Math.min(X.limit, Math.floor((Date.now()-X.start)/1000));
     const g=X.items.map(gradeItem); let E=0,P=0; const dom={};
     X.items.forEach((it,k)=>{ E+=g[k].e; P+=g[k].p; const d=it.q.domain; dom[d]=dom[d]||{e:0,p:0}; dom[d].e+=g[k].e; dom[d].p+=g[k].p;
-      if(it.kind==="mc") MC.rec(it.q, g[k].ok); else { status[it.q.id]=g[k].ok?"pass":"fail"; } });
+      if(it.kind==="mc") MC.rec(it.q, g[k].ok); else { status[it.q.id]=g[k].ok?"pass":"fail";
+        window.CLOUD&&CLOUD.log({question_id:it.q.id, kind:"pbq", domain:it.q.domain, level:lvl(it.q), correct:g[k].ok, score:+g[k].frac.toFixed(3), source:"exam"}); } });
     store.set("pbq-status",status);
     const pct=P?E/P:0, sc=scaled(pct), domPct={}; for(const d in dom) domPct[d]=dom[d].e/dom[d].p;
     hist.push({d:Date.now(), len:X.len, score:sc, pct, secs, dom:domPct}); hist=hist.slice(-50); store.set("exam-history",hist);
+    window.CLOUD&&CLOUD.exam({length:X.len, difficulty:xlvl, score:sc, pct:+pct.toFixed(4), secs, domain_pct:domPct});
     const pass=sc>=PASS;
     $("#score").textContent = `${hist.length} exam${hist.length>1?"s":""} taken · best ${Math.max(...hist.map(h=>h.score))}`;
     const domRows=[1,2,3,4,5].filter(d=>dom[d]).map(d=>{const p=domPct[d];return `<div class="dom" style="cursor:default"><span class="nm">${esc(DOMAINS[d])}<div class="muted">${X.items.filter(it=>it.q.domain===d).length} questions</div></span><span class="bar"><i class="${barCls(p)}" style="width:${Math.round(p*100)}%"></i></span><span class="stat">${pctS(p)}</span></div>`}).join("");
@@ -898,7 +927,8 @@ const REF = (() => {
         <div class="actions"><button class="btn primary" data-ref-act="qnext">${QZ.i===QZ.items.length-1?"See results":"Next →"} (Enter)</button><button class="btn" data-ref-act="qsetup" style="margin-left:auto">End quiz</button></div>`
       :`<p class="tip">Keyboard: 1–4 to answer, Enter for next.</p>`}`);
   }
-  function quizAnswer(k){ const it=QZ&&QZ.items[QZ.i]; if(!it||it.pick!==null) return; it.pick=it.opts[k].y; const ok=it.pick===it.x; if(ok) QZ.right++; known["a:"+it.x.a]=ok?1:0; store.set("ref-known",known); quizView(); }
+  function quizAnswer(k){ const it=QZ&&QZ.items[QZ.i]; if(!it||it.pick!==null) return; it.pick=it.opts[k].y; const ok=it.pick===it.x; if(ok) QZ.right++; known["a:"+it.x.a]=ok?1:0; store.set("ref-known",known);
+    window.CLOUD&&CLOUD.log({question_id:("acr:"+it.x.a).slice(0,80), kind:"acronym", correct:ok, score:ok?1:0, source:"quiz"}); quizView(); }
 
   function home(){ ({acr:acrView, ports:portView, cards:cardsView, quiz:quizView})[st.view](); }
   function open(view, d){ st.view=view; st.q=""; if(d){ st.deck=d; buildDeck(); } save(); }
@@ -1013,5 +1043,8 @@ function cur_set(i){ cur=i; }
 (() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
   if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
+<!-- Cloud sync (optional): config.js is generated at deploy time from environment variables -->
+<script src="config.js"></script>
+<script src="app/cloud.js"></script>
 </body>
 </html>

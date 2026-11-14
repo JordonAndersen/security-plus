@@ -4,8 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const dir = path.join(__dirname, "..", "questions");
-const index = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+const dir = path.join(__dirname, "..", "web", "questions");
+const index = fs.readFileSync(path.join(__dirname, "..", "web", "index.html"), "utf8");
 const bank = [];
 const errors = [];
 const err = (q, msg) => errors.push(`[${q && q.id || "?"}] ${msg}`);
@@ -63,7 +63,7 @@ const byDomain = [1, 2, 3, 4, 5].map(d => `D${d}: ${bank.filter(q => q.domain ==
 console.log(`PBQ: ${bank.length} questions from ${files.length} files.  ${byDomain}`);
 
 // ---- Multiple choice ----
-const mdir = path.join(__dirname, "..", "mcq");
+const mdir = path.join(__dirname, "..", "web", "mcq");
 const mc = [];
 const mfiles = fs.existsSync(mdir) ? fs.readdirSync(mdir).filter(f => f.endsWith(".js")).sort() : [];
 for (const f of mfiles) {
@@ -95,7 +95,7 @@ const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (
 console.log(`Levels — PBQ ${lv(bank)} | MC ${lv(mc)}`);
 console.log(`MC:  ${mc.length} questions from ${mfiles.length} files.  ${mcDom}`);
 // ---- Reference data (acronyms + ports) ----
-const rdir = path.join(__dirname, "..", "ref");
+const rdir = path.join(__dirname, "..", "web", "ref");
 const acr = [], ports = [];
 const rfiles = fs.existsSync(rdir) ? fs.readdirSync(rdir).filter(f => f.endsWith(".js")).sort() : [];
 for (const f of rfiles) {
@@ -117,7 +117,7 @@ for (const x of ports) {
   if (seenP.has(x.p)) errors.push(`[port ${x.p}] duplicate`); seenP.add(x.p);
 }
 // ---- Crash course ----
-const cdir = path.join(__dirname, "..", "crash");
+const cdir = path.join(__dirname, "..", "web", "crash");
 const crash = [];
 const cfiles = fs.existsSync(cdir) ? fs.readdirSync(cdir).filter(f => f.endsWith(".js")).sort() : [];
 for (const f of cfiles) {

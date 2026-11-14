@@ -1,0 +1,305 @@
+// Cloud layer: Supabase auth (email/password, magic link, password reset), profile,
+// cross-device sync of app state, and an append-only answer log for weak-area analysis.
+// If config.js has no Supabase settings, the app runs in local-only mode (browser storage),
+// with export/import still available.
+window.CLOUD = (() => {
+  const cfg = window.SECPLUS_CONFIG || {};
+  const configured = !!(cfg.supabaseUrl && cfg.supabaseAnonKey);
+  const P = "sp:";                                  // must match store prefix in index.html
+  const META = P + "__meta", LOGQ = P + "__logq";
+  // Keys synced to the cloud (everything a user would expect to follow them between devices)
+  const KEYS = ["pbq-status","pbq-level","mcq-stats","mcq-prefs","exam-history","exam-len","exam-level",
+                "ref-known","ref-prefs","cc-done","cc-cur","exam-date"];
+  const $ = s => document.querySelector(s);
+  const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const jget = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
+  const jset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+  let sb = null, user = null, profile = null, status = configured ? "signed-out" : "local";
+  let dirty = new Set(), pushTimer = null, lastPull = 0, lastErr = "", view = null;
+  const meta = () => jget(META, {});
+  const setMeta = m => jset(META, m);
+
+  // ---------------- state sync ----------------
+  function changed(k) {
+    if (!KEYS.includes(k)) return;
+    const m = meta(); m[k] = Date.now(); setMeta(m);
+    if (user) { dirty.add(k); schedulePush(); }
+  }
+  function schedulePush(ms = 1500) { clearTimeout(pushTimer); pushTimer = setTimeout(push, ms); }
+  async function push() {
+    if (!user || !sb || !dirty.size) return;
+    const m = meta(), keys = [...dirty];
+    const rows = keys.map(k => ({ user_id: user.id, key: k, value: jget(P + k, null), updated_at: new Date(m[k] || Date.now()).toISOString() }))
+                     .filter(r => r.value !== null);
+    if (!rows.length) { dirty.clear(); return; }
+    setStatus("syncing");
+    const { error } = await sb.from("user_state").upsert(rows, { onConflict: "user_id,key" });
+    if (error) { lastErr = error.message; setStatus("error"); schedulePush(15000); return; }
+    keys.forEach(k => dirty.delete(k));
+    await flushLogs();
+    setStatus("synced");
+  }
+  // Pull remote state; newer remote values overwrite local ones. Returns true if anything changed.
+  async function pull() {
+    if (!user || !sb) return false;
+    const { data, error } = await sb.from("user_state").select("key,value,updated_at");
+    if (error) { lastErr = error.message; setStatus("error"); return false; }
+    lastPull = Date.now();
+    const m = meta(); let changedAny = false; const remoteKeys = new Set();
+    for (const r of data || []) {
+      if (!KEYS.includes(r.key)) continue;
+      remoteKeys.add(r.key);
+      const rt = Date.parse(r.updated_at), lt = m[r.key] || 0;
+      if (rt > lt) {
+        const cur = localStorage.getItem(P + r.key), next = JSON.stringify(r.value);
+        if (cur !== next) { localStorage.setItem(P + r.key, next); changedAny = true; }
+        m[r.key] = rt;
+      } else if (lt > rt) dirty.add(r.key);
+    }
+    // Local keys the cloud has never seen (e.g., progress made before first sign-in) get uploaded
+    for (const k of KEYS) if (!remoteKeys.has(k) && localStorage.getItem(P + k) !== null) { dirty.add(k); if (!m[k]) m[k] = Date.now(); }
+    setMeta(m);
+    if (dirty.size) schedulePush(300); else setStatus("synced");
+    return changedAny;
+  }
+  const examRunning = () => window.EX && EX.inProgress && EX.inProgress();
+  // Modules read storage at start-up, so apply remote changes with one controlled reload.
+  function applyRemote(soft) {
+    if (soft || examRunning()) { toast("Newer progress is available from another device.", "Reload now", () => location.reload()); return; }
+    const last = +sessionStorage.getItem("sp-reloaded") || 0;
+    if (Date.now() - last < 15000) return;           // loop guard
+    sessionStorage.setItem("sp-reloaded", Date.now());
+    location.reload();
+  }
+
+  // ---------------- answer log ----------------
+  function log(ev) {
+    const q = jget(LOGQ, { a: [], e: [] });
+    q.a.push(Object.assign({ answered_at: new Date().toISOString() }, ev));
+    if (q.a.length > 5000) q.a = q.a.slice(-5000);
+    jset(LOGQ, q);
+    if (user) schedulePush(3000);
+  }
+  function exam(row) {
+    const q = jget(LOGQ, { a: [], e: [] });
+    q.e.push(Object.assign({ taken_at: new Date().toISOString() }, row));
+    jset(LOGQ, q);
+    if (user) schedulePush(500);
+  }
+  async function flushLogs() {
+    if (!user || !sb) return;
+    const q = jget(LOGQ, { a: [], e: [] });
+    if (q.e.length) {
+      const rows = q.e.map(r => Object.assign({ user_id: user.id }, r));
+      const { error } = await sb.from("exam_attempts").insert(rows);
+      if (!error) q.e = []; else lastErr = error.message;
+    }
+    while (q.a.length) {
+      const chunk = q.a.slice(0, 500).map(r => Object.assign({ user_id: user.id }, r));
+      const { error } = await sb.from("question_attempts").insert(chunk);
+      if (error) { lastErr = error.message; break; }
+      q.a = q.a.slice(500);
+    }
+    jset(LOGQ, q);
+  }
+
+  // ---------------- auth ----------------
+  async function loadProfile() {
+    const { data } = await sb.from("profiles").select("display_name,exam_date").eq("id", user.id).maybeSingle();
+    profile = data || { display_name: "", exam_date: null };
+    // exam date: prefer whichever side has a value
+    if (profile.exam_date && !jget(P + "exam-date", null)) jset(P + "exam-date", profile.exam_date);
+  }
+  async function afterLogin(isFresh) {
+    await loadProfile();
+    const changedAny = await pull();
+    await flushLogs();
+    renderAcct();
+    if (changedAny) applyRemote(!isFresh);
+  }
+  function loadLib() {
+    return new Promise((res, rej) => {
+      if (window.supabase) return res();
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+      s.onload = res; s.onerror = () => rej(new Error("Could not load the Supabase library."));
+      document.head.appendChild(s);
+    });
+  }
+  async function init() {
+    renderAcct();
+    if (!configured) return;
+    try { await loadLib(); } catch (e) { lastErr = e.message; setStatus("error"); return; }
+    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+      auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
+    sb.auth.onAuthStateChange((evt, session) => {
+      if (evt === "PASSWORD_RECOVERY") { user = session?.user || null; openModal("newpw"); return; }
+      if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; setStatus("syncing"); afterLogin(true); }
+      if (evt === "SIGNED_OUT") { user = null; profile = null; setStatus("signed-out"); }
+    });
+    const { data } = await sb.auth.getSession();
+    // Clean ?code=… left by magic-link / reset redirects (PKCE)
+    if (/[?&]code=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+    if (data.session?.user && !user) { user = data.session.user; setStatus("syncing"); await afterLogin(false); }
+    else if (!user) setStatus("signed-out");
+    // Catch changes from other devices when you come back to this tab
+    document.addEventListener("visibilitychange", async () => {
+      if (!user) return;
+      if (document.visibilityState === "hidden") { push(); return; }
+      if (Date.now() - lastPull > 60000 && !dirty.size) { if (await pull()) applyRemote(true); }
+    });
+  }
+  const redirectTo = () => location.origin + location.pathname;
+  async function signIn(email, password) { const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; closeModal(); }
+  async function signUp(email, password, name) {
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name }, emailRedirectTo: redirectTo() } });
+    if (error) throw error;
+    return data.session ? "signed-in" : "confirm";
+  }
+  async function magic(email) { const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo() } }); if (error) throw error; }
+  async function forgot(email) { const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo() }); if (error) throw error; }
+  async function newPassword(pw) { const { error } = await sb.auth.updateUser({ password: pw }); if (error) throw error; }
+  async function signOut() { await push(); await sb.auth.signOut(); user = null; closeModal(); setStatus("signed-out"); }
+  async function saveProfile(name, date) {
+    jset(P + "exam-date", date || null); changed("exam-date");
+    if (user) {
+      const { error } = await sb.from("profiles").update({ display_name: name || null, exam_date: date || null }).eq("id", user.id);
+      if (error) throw error;
+      profile = { display_name: name, exam_date: date || null };
+    }
+    renderAcct();
+  }
+  async function resetAll() {
+    if (user) {
+      await sb.from("user_state").delete().eq("user_id", user.id);
+      await sb.from("question_attempts").delete().eq("user_id", user.id);
+      await sb.from("exam_attempts").delete().eq("user_id", user.id);
+    }
+    Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k));
+    location.reload();
+  }
+
+  // ---------------- export / import ----------------
+  function exportData() {
+    const out = { app: "secplus-practice-lab", version: 1, exported_at: new Date().toISOString(), state: {} };
+    for (const k of KEYS) { const v = jget(P + k, undefined); if (v !== undefined) out.state[k] = v; }
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `secplus-progress-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  async function importData(file) {
+    const data = JSON.parse(await file.text());
+    if (data.app !== "secplus-practice-lab" || typeof data.state !== "object") throw new Error("That file isn't a Security+ Practice Lab export.");
+    const m = meta(), now = Date.now();
+    for (const [k, v] of Object.entries(data.state)) if (KEYS.includes(k)) { jset(P + k, v); m[k] = now; dirty.add(k); }
+    setMeta(m);
+    if (user) await push();
+    location.reload();
+  }
+
+  // ---------------- UI ----------------
+  function daysLeft() {
+    const d = jget(P + "exam-date", null); if (!d) return null;
+    const t = new Date(d + "T12:00:00"), n = new Date(); n.setHours(12,0,0,0);
+    return Math.round((t - n) / 86400000);
+  }
+  function setStatus(s) { status = s; renderAcct(); if (view === "account") renderModal(); }
+  const STATUS = { local: "Saved in this browser", "signed-out": "Not signed in", syncing: "Syncing…", synced: "Synced", error: "Sync error" };
+  function renderAcct() {
+    const el = $("#acct"); if (!el) return;
+    const dl = daysLeft();
+    const cd = dl == null ? "" : `<span class="chip countdown ${dl <= 7 ? "lvl-hard" : ""}" title="Exam date">${dl > 0 ? dl + (dl === 1 ? " day" : " days") + " to exam" : dl === 0 ? "Exam day — good luck" : "Exam date passed"}</span>`;
+    const label = user ? h((profile && profile.display_name) || user.email.split("@")[0]) : configured ? "Sign in" : "Progress";
+    const dot = { local: "", "signed-out": "", syncing: "dot-sync", synced: "dot-ok", error: "dot-err" }[status];
+    el.innerHTML = `${cd}<button class="acct-btn" data-acct="open" title="${h(STATUS[status])}">${dot ? `<i class="dot ${dot}"></i>` : ""}${label}</button>`;
+  }
+  function openModal(v) { view = v || (configured ? (user ? "account" : "signin") : "local"); renderModal(); }
+  function closeModal() { view = null; const m = $("#acct-modal"); if (m) m.remove(); }
+  function field(id, label, type = "text", val = "", extra = "") { return `<label class="f"><span>${label}</span><input id="${id}" type="${type}" value="${h(val)}" ${extra}></label>`; }
+  function renderModal() {
+    let m = $("#acct-modal");
+    if (!m) { m = document.createElement("div"); m.id = "acct-modal"; m.className = "modal-bg"; document.body.appendChild(m); }
+    const date = jget(P + "exam-date", "") || "";
+    const progress = `<div class="mrow"><button class="btn" data-acct="export">Export progress</button>
+        <label class="btn" style="display:inline-block">Import progress<input type="file" accept="application/json" id="acct-import" hidden></label></div>`;
+    const body = {
+      local: `<h3>Your progress</h3><p class="muted">Cloud sync isn't configured on this copy, so progress is saved in this browser only. Use export/import to back it up or move it to another device.</p>
+        ${field("acct-date","Exam date","date",date)}<div class="mrow"><button class="btn primary" data-acct="savelocal">Save</button></div><hr>${progress}`,
+      signin: `<h3>Sign in</h3><p class="muted">Sync your progress across devices.</p>
+        ${field("acct-email","Email","email","",'autocomplete="email"')}${field("acct-pw","Password","password","",'autocomplete="current-password"')}
+        <div class="mrow"><button class="btn primary" data-acct="signin">Sign in</button><button class="btn" data-acct="magic">Email me a sign-in link</button></div>
+        <p class="muted"><a href="#" data-acct-view="signup">Create an account</a> · <a href="#" data-acct-view="forgot">Forgot password?</a></p>`,
+      signup: `<h3>Create account</h3>
+        ${field("acct-name","Display name","text","",'maxlength="60" autocomplete="nickname"')}${field("acct-email","Email","email","",'autocomplete="email"')}
+        ${field("acct-pw","Password (12+ characters)","password","",'autocomplete="new-password" minlength="12"')}
+        <div class="mrow"><button class="btn primary" data-acct="signup">Create account</button></div>
+        <p class="muted">Progress you've already made in this browser will be uploaded to your account. <a href="#" data-acct-view="signin">Back to sign in</a></p>`,
+      forgot: `<h3>Reset password</h3>${field("acct-email","Email","email","",'autocomplete="email"')}
+        <div class="mrow"><button class="btn primary" data-acct="forgot">Send reset link</button></div><p class="muted"><a href="#" data-acct-view="signin">Back to sign in</a></p>`,
+      newpw: `<h3>Choose a new password</h3>${field("acct-pw","New password (12+ characters)","password","",'autocomplete="new-password" minlength="12"')}
+        <div class="mrow"><button class="btn primary" data-acct="newpw">Update password</button></div>`,
+      account: user ? `<h3>Account</h3><p class="muted">${h(user.email)} · <span class="sync-${status}">${h(STATUS[status])}</span>${status === "error" && lastErr ? ` — ${h(lastErr)}` : ""}</p>
+        ${field("acct-name","Display name","text",(profile && profile.display_name) || "",'maxlength="60"')}${field("acct-date","Exam date","date",date)}
+        <div class="mrow"><button class="btn primary" data-acct="saveprofile">Save profile</button><button class="btn" data-acct="syncnow">Sync now</button></div><hr>${progress}<hr>
+        <details><summary class="muted">Danger zone</summary><p class="muted">Deletes all progress, answer history and exam history on every device. Type RESET to confirm.</p>
+        <div class="mrow"><input id="acct-reset" placeholder="RESET" style="max-width:140px"><button class="btn" data-acct="reset">Delete my progress</button></div></details>
+        <div class="mrow" style="margin-top:14px"><button class="btn" data-acct="signout">Sign out</button></div>` : ""
+    }[view] || "";
+    m.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><button class="mclose" data-acct="close" aria-label="Close">×</button>${body}<div class="merr" id="acct-msg"></div></div>`;
+    const first = m.querySelector("input:not([type=file])"); if (first) first.focus();
+  }
+  function msg(t, ok) { const e = $("#acct-msg"); if (e) { e.textContent = t; e.className = "merr" + (ok ? " ok" : ""); } }
+  function toast(text, btn, fn) {
+    let t = $("#acct-toast"); if (t) t.remove();
+    t = document.createElement("div"); t.id = "acct-toast"; t.className = "toast";
+    t.innerHTML = `<span>${h(text)}</span>${btn ? `<button class="btn primary">${h(btn)}</button>` : ""}<button class="mclose" aria-label="Dismiss">×</button>`;
+    document.body.appendChild(t);
+    if (btn) t.querySelector(".btn").onclick = fn;
+    t.querySelector(".mclose").onclick = () => t.remove();
+  }
+  const val = id => ($("#" + id) || {}).value || "";
+
+  document.addEventListener("click", async e => {
+    const v = e.target.closest("[data-acct-view]"); if (v) { e.preventDefault(); view = v.dataset.acctView; return renderModal(); }
+    if (e.target.id === "acct-modal") return closeModal();
+    const b = e.target.closest("[data-acct]"); if (!b) return;
+    const a = b.dataset.acct;
+    try {
+      if (a === "open") return openModal();
+      if (a === "close") return closeModal();
+      if (a === "export") return exportData();
+      if (a === "savelocal") { await saveProfile(null, val("acct-date")); return msg("Saved.", true); }
+      if (a === "signin") { b.disabled = true; await signIn(val("acct-email").trim(), val("acct-pw")); return; }
+      if (a === "magic") { if (!val("acct-email")) return msg("Enter your email first."); await magic(val("acct-email").trim()); return msg("Check your email for a sign-in link.", true); }
+      if (a === "signup") {
+        if (val("acct-pw").length < 12) return msg("Use at least 12 characters.");
+        const r = await signUp(val("acct-email").trim(), val("acct-pw"), val("acct-name").trim());
+        if (r === "confirm") return msg("Check your email to confirm your account, then sign in.", true);
+        return closeModal();
+      }
+      if (a === "forgot") { await forgot(val("acct-email").trim()); return msg("If that account exists, a reset link is on its way.", true); }
+      if (a === "newpw") { if (val("acct-pw").length < 12) return msg("Use at least 12 characters."); await newPassword(val("acct-pw")); view = "account"; renderModal(); return msg("Password updated.", true); }
+      if (a === "saveprofile") { await saveProfile(val("acct-name").trim(), val("acct-date")); return msg("Profile saved.", true); }
+      if (a === "syncnow") { await push(); if (await pull()) applyRemote(false); return msg("Up to date.", true); }
+      if (a === "signout") return signOut();
+      if (a === "reset") { if (val("acct-reset") !== "RESET") return msg("Type RESET to confirm."); return resetAll(); }
+    } catch (err) { msg(err.message || String(err)); b.disabled = false; }
+  });
+  document.addEventListener("change", async e => {
+    if (e.target.id !== "acct-import" || !e.target.files[0]) return;
+    try { await importData(e.target.files[0]); } catch (err) { msg(err.message); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && view) closeModal();
+    if (e.key === "Enter" && view && e.target.closest && e.target.closest("#acct-modal input")) {
+      const primary = $("#acct-modal .btn.primary"); if (primary) { e.preventDefault(); primary.click(); }
+    }
+  });
+
+  const api = { changed, log, exam, init, configured: () => configured, user: () => user, _status: () => status };
+  setTimeout(init, 0);
+  return api;
+})();

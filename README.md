@@ -4,13 +4,17 @@ Interactive practice for the **performance-based questions (PBQs)** on CompTIA S
 
 ## Run it
 
-Open `index.html` in a browser, or host the folder anywhere that serves static files (GitHub Pages, S3, an intranet share). Progress is saved in the viewer's browser.
+- **Hosted with accounts (recommended):** Netlify + Supabase. See **DEPLOY.md**.
+- **Local / static only:** serve the `web/` folder with any static host, or `python3 -m http.server --directory web`. Without Supabase settings, progress is saved in the browser, and Export/Import moves it between devices.
 
 ## Project layout
 
 ```
-index.html                         Page engine (UI, grading, timer, progress)
-questions/
+web/index.html                     Page engine (UI, grading, timer, progress)
+web/app/cloud.js                   Accounts, sync, answer logging (Supabase)
+supabase/migrations/               Database schema + RLS
+netlify.toml                       Hosting config + security headers
+web/questions/
   d1-general-concepts.js           Domain 1.0 — General Security Concepts
   d2-threats.js                    Domain 2.0 — Threats, Vulnerabilities & Mitigations
   d3-architecture.js               Domain 3.0 — Security Architecture
