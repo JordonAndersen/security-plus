@@ -118,6 +118,18 @@ select.bad,input.bad{border-color:var(--bad);background:var(--bad-bg)}
 .review{border-top:1px solid var(--line);padding:12px 0}
 .review .yours{font-size:13px}
 .muted{color:var(--muted);font-size:13px}
+.chip-custom{background:#e8e3ff;color:#4b3aa8}
+.btn.sm{padding:5px 10px;font-size:13px}.btn.danger{border-color:var(--bad);color:var(--bad)}
+.vis-pending{background:#fff3d6;color:#8a5a00}.vis-public{background:var(--ok-bg);color:var(--ok)}.vis-rejected{background:var(--bad-bg);color:var(--bad)}
+table.qlist td{font-size:14px;vertical-align:top}.qact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.editor .f{display:block;margin:12px 0}.editor .f>span,.editor label.f{font-size:13px;font-weight:600}
+.editor textarea,.editor input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font:inherit;font-weight:400;font-size:14px;margin-top:4px}
+.editor textarea.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.editor .row{gap:14px}.f2{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;min-width:220px;flex:1}
+.edrow{display:flex;gap:8px;align-items:center;margin:6px 0}.edrow input[type=text]{margin-top:0}.edrow input[type=checkbox]{width:18px;height:18px;flex:0 0 auto}
+.edrow select{max-width:240px}.edrow .pos{width:24px;height:24px;border-radius:6px;background:var(--chip);display:grid;place-items:center;font-size:12px;font-weight:600;flex:0 0 24px}
+@media (prefers-color-scheme:dark){.vis-pending{background:#3a2e10;color:#ffcf6b}}
+@media (prefers-color-scheme:dark){.chip-custom{background:#2c2550;color:#c9bfff}}
 .acct{display:flex;gap:8px;align-items:center;flex:0 0 auto}
 .acct-btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}.dot-ok{background:var(--ok)}.dot-err{background:var(--bad)}.dot-sync{background:#c98a00}
@@ -223,11 +235,31 @@ window.PBQ = {
 <script src="ref/ports.js"></script>
 <!-- Crash course -->
 <script src="crash/content.js"></script>
+<!-- User-created questions: loaded from the cache that app/cloud.js keeps in sync with Supabase.
+     User text is always escaped (scenario is converted to plain paragraphs, never raw HTML). -->
+<script>
+(() => {
+  let rows = [];
+  try { rows = JSON.parse(localStorage.getItem("sp:__custom") || "[]"); } catch (e) { return; }
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const paras = t => String(t || "").split(/\n+/).filter(x => x.trim()).map(x => `<p>${esc(x)}</p>`).join("");
+  for (const r of rows) {
+    try {
+      const d = r.data || {}, base = { id: "u-" + r.id, domain: r.domain, level: r.level, custom: true, author: r.author, vis: r.vis };
+      if (r.kind === "mc") PBQ.addMC(r.domain, [Object.assign(base, { q: d.q, o: d.o, a: d.a, e: d.e })]);
+      else if (r.kind === "pbq-match") PBQ.add([Object.assign(base, { type: "grid", title: d.title, scenario: paras(d.scenario), log: d.log || undefined, task: d.task,
+        cols: [d.col || "Answer"], opts: [d.options], rows: (d.rows || []).map(x => ({ l: x.l, a: [x.a], w: x.w || "" })), explain: d.explain, time: 4 })]);
+      else if (r.kind === "pbq-order") PBQ.add([Object.assign(base, { type: "order", title: d.title, scenario: paras(d.scenario), log: d.log || undefined, task: d.task,
+        items: d.items, explain: d.explain, time: 3 })]);
+    } catch (e) { /* skip a bad cached row rather than break the app */ }
+  }
+})();
+</script>
 </head>
 <body>
 <header>
   <h1>Security+ PBQ Practice Lab</h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="admin" hidden>Admin</button></span>
   <span class="score" id="score"></span>
   <span class="acct" id="acct"></span>
 </header>
@@ -295,7 +327,7 @@ const lvl = q => q.level || "medium";
 let pbqLevel = store.get("pbq-level","all");
 const lvlOk = q => pbqLevel==="all" || lvl(q)===pbqLevel;
 const visibleIdx = () => Q.map((q,i)=>i).filter(i=>lvlOk(Q[i]));
-const lvlChip = q => `<span class="chip lvl-${lvl(q)}">${LEVELS[lvl(q)]}</span>`;
+const lvlChip = q => `<span class="chip lvl-${lvl(q)}">${LEVELS[lvl(q)]}</span>` + (q.custom ? `<span class="chip chip-custom" title="User-created question">Custom · ${esc(q.author||"")}${q.vis&&q.vis!=="public"?" ("+esc(q.vis)+")":""}</span>` : "");
 
 function renderNav(){
   const pass = Q.filter(q=>status[q.id]==="pass").length;
@@ -426,6 +458,8 @@ function setTab(t){
   else if(t==="exam"){ try{history.replaceState(null,"","#exam")}catch(e){} EX.home(); }
   else if(t==="ref"){ try{history.replaceState(null,"","#ref")}catch(e){} REF.home(); }
   else if(t==="crash"){ CC.home(); }
+  else if(t==="mine"){ try{history.replaceState(null,"","#mine")}catch(e){} MINE.home(); }
+  else if(t==="admin"){ try{history.replaceState(null,"","#admin")}catch(e){} ADMIN.home(); }
   else { if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded.</div>'; return; } go(cur); }
   window.scrollTo(0,0);
 }
@@ -1041,10 +1075,12 @@ function cur_set(i){ cur=i; }
 
 // Initial route
 (() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
+  if(h==="mine"||h==="admin"){ window.__pendingTab=h; return setTab("pbq"); }   // opened by app/questions-ui.js once it loads
   if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
 <!-- Cloud sync (optional): config.js is generated at deploy time from environment variables -->
 <script src="config.js"></script>
 <script src="app/cloud.js"></script>
+<script src="app/questions-ui.js"></script>
 </body>
 </html>

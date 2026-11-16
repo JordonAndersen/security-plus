@@ -6,7 +6,7 @@ window.CLOUD = (() => {
   const cfg = window.SECPLUS_CONFIG || {};
   const configured = !!(cfg.supabaseUrl && cfg.supabaseAnonKey);
   const P = "sp:";                                  // must match store prefix in index.html
-  const META = P + "__meta", LOGQ = P + "__logq";
+  const META = P + "__meta", LOGQ = P + "__logq", CQ = P + "__custom";
   // Keys synced to the cloud (everything a user would expect to follow them between devices)
   const KEYS = ["pbq-status","pbq-level","mcq-stats","mcq-prefs","exam-history","exam-len","exam-level",
                 "ref-known","ref-prefs","cc-done","cc-cur","exam-date"];
@@ -106,17 +106,65 @@ window.CLOUD = (() => {
 
   // ---------------- auth ----------------
   async function loadProfile() {
-    const { data } = await sb.from("profiles").select("display_name,exam_date").eq("id", user.id).maybeSingle();
-    profile = data || { display_name: "", exam_date: null };
+    const { data } = await sb.from("profiles").select("display_name,exam_date,role").eq("id", user.id).maybeSingle();
+    profile = data || { display_name: "", exam_date: null, role: "user" };
     // exam date: prefer whichever side has a value
+    if (profile.exam_date) profile.exam_date = String(profile.exam_date).slice(0, 10);   // always YYYY-MM-DD
     if (profile.exam_date && !jget(P + "exam-date", null)) jset(P + "exam-date", profile.exam_date);
   }
   async function afterLogin(isFresh) {
     await loadProfile();
-    const changedAny = await pull();
+    const changedState = await pull();
+    const changedBank = await loadCustom();
     await flushLogs();
-    renderAcct();
-    if (changedAny) applyRemote(!isFresh);
+    renderAcct(); renderTabs();
+    if (changedState || changedBank) applyRemote(!isFresh);
+    document.dispatchEvent(new CustomEvent("cloud:login"));
+  }
+
+  // ---------------- custom questions ----------------
+  // The bank cache (sp:__custom) is read by the loader in index.html at start-up.
+  const isAdmin = () => !!(user && profile && profile.role === "admin");
+  async function loadCustom() {
+    if (!user || !sb) return false;
+    const { data, error } = await sb.from("custom_questions").select("id,owner_id,kind,domain,level,data,visibility,updated_at");
+    if (error) { lastErr = error.message; return false; }
+    const rows = (data || []).filter(r => r.owner_id === user.id || r.visibility === "public");
+    const others = [...new Set(rows.filter(r => r.owner_id !== user.id).map(r => r.owner_id))];
+    const names = {};
+    if (others.length) { const { data: a } = await sb.rpc("question_authors", { ids: others }); (a || []).forEach(x => names[x.id] = x.display_name); }
+    const cache = rows.map(r => ({ id: r.id, kind: r.kind, domain: r.domain, level: r.level, data: r.data, vis: r.visibility,
+      mine: r.owner_id === user.id, author: r.owner_id === user.id ? "You" : (names[r.owner_id] || "Community") }))
+      .sort((x, y) => x.id < y.id ? -1 : 1);
+    const prev = localStorage.getItem(CQ), next = JSON.stringify(cache);
+    if (prev === next) return false;
+    localStorage.setItem(CQ, next); return true;
+  }
+  async function refreshBank() {
+    if (await loadCustom()) toast("Your question bank changed.", "Reload to use it", () => location.reload());
+  }
+  const must = r => { if (r.error) throw new Error(r.error.message); return r.data; };
+  const cqCols = "id,owner_id,kind,domain,level,data,visibility,review_note,reviewed_at,created_at,updated_at";
+  const Q = {
+    mine:      async () => must(await sb.from("custom_questions").select(cqCols).eq("owner_id", user.id)),
+    save:      async (q) => {
+      const row = { kind: q.kind, domain: q.domain, level: q.level, data: q.data, visibility: q.visibility };
+      const r = q.id ? await sb.from("custom_questions").update(row).eq("id", q.id).select(cqCols)
+                     : await sb.from("custom_questions").insert(row).select(cqCols);
+      const d = must(r); refreshBank(); return Array.isArray(d) ? d[0] : d;
+    },
+    remove:    async (id) => { must(await sb.from("custom_questions").delete().eq("id", id)); refreshBank(); },
+    setVis:    async (id, visibility) => { must(await sb.from("custom_questions").update({ visibility }).eq("id", id).select("id")); refreshBank(); },
+    // admin
+    byVis:     async (v) => must(await sb.from("custom_questions").select(cqCols).eq("visibility", v)),
+    review:    async (id, visibility, note) => { must(await sb.from("custom_questions").update({ visibility, review_note: note || null }).eq("id", id).select("id")); refreshBank(); },
+    profiles:  async () => must(await sb.from("profiles").select("id,display_name,email,role")),
+    users:     async () => must(await sb.rpc("admin_user_overview")),
+    setRole:   async (id, role) => must(await sb.rpc("admin_set_role", { target: id, new_role: role }))
+  };
+  function renderTabs() {
+    const adm = document.querySelector('[data-tab="admin"]');
+    if (adm) adm.hidden = !isAdmin();
   }
   function loadLib() {
     return new Promise((res, rej) => {
@@ -128,16 +176,17 @@ window.CLOUD = (() => {
     });
   }
   async function init() {
-    renderAcct();
+    renderAcct(); renderTabs();
     if (!configured) return;
     try { await loadLib(); } catch (e) { lastErr = e.message; setStatus("error"); return; }
     sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
       auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
     sb.auth.onAuthStateChange((evt, session) => {
-      if (evt === "PASSWORD_RECOVERY") { user = session?.user || null; openModal("newpw"); return; }
-      if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; setStatus("syncing"); afterLogin(true); }
-      if (evt === "SIGNED_OUT") { user = null; profile = null; setStatus("signed-out"); }
+      // Supabase docs: don't await other Supabase calls inside this callback (can deadlock) — defer them.
+      if (evt === "PASSWORD_RECOVERY") { user = session?.user || null; setTimeout(() => openModal("newpw"), 0); return; }
+      if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; setStatus("syncing"); setTimeout(() => afterLogin(true), 0); }
+      if (evt === "SIGNED_OUT") { const hadCustom = !!localStorage.getItem(CQ); user = null; profile = null; localStorage.removeItem(CQ); setStatus("signed-out"); renderTabs(); if (hadCustom) setTimeout(() => location.reload(), 0); }
     });
     const { data } = await sb.auth.getSession();
     // Clean ?code=… left by magic-link / reset redirects (PKCE)
@@ -202,7 +251,7 @@ window.CLOUD = (() => {
 
   // ---------------- UI ----------------
   function daysLeft() {
-    const d = jget(P + "exam-date", null); if (!d) return null;
+    const raw = jget(P + "exam-date", null); if (!raw) return null; const d = String(raw).slice(0, 10);
     const t = new Date(d + "T12:00:00"), n = new Date(); n.setHours(12,0,0,0);
     return Math.round((t - n) / 86400000);
   }
@@ -299,7 +348,7 @@ window.CLOUD = (() => {
     }
   });
 
-  const api = { changed, log, exam, init, configured: () => configured, user: () => user, _status: () => status };
+  const api = { changed, log, exam, init, configured: () => configured, user: () => user, isAdmin, profile: () => profile, questions: Q, toast, _status: () => status };
   setTimeout(init, 0);
   return api;
 })();

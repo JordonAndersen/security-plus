@@ -2,3 +2,4 @@ web/config.js
 node_modules/
 .DS_Store
 .netlify/
+tests/db/package-lock.json

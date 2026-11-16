@@ -1,0 +1,73 @@
+const { PGlite } = require("@electric-sql/pglite");
+const fs = require("fs");
+const path = require("path");
+const M = path.join(__dirname, "..", "..", "supabase", "migrations") + "/";
+let pass = 0, fail = 0;
+const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? "  ✓ " : "  ✗ ") + m); };
+(async () => {
+  const db = new PGlite();
+  await db.exec(fs.readFileSync(path.join(__dirname, "stub.sql"), "utf8"));
+  await db.exec(fs.readFileSync(M + "0001_init.sql", "utf8"));
+  await db.exec(fs.readFileSync(M + "0002_roles_custom_questions.sql", "utf8"));
+  console.log("migrations applied");
+  const mk = async (email, name) => (await db.query("insert into auth.users(email, raw_user_meta_data) values ($1, $2) returning id", [email, { display_name: name }])).rows[0].id;
+  const A = await mk("jordon@example.com", "Jordon"), B = await mk("other@example.com", "Other");
+  // run SQL as an authenticated user
+  const as = async (uid, sql, params = []) => {
+    await db.exec("begin");
+    try {
+      await db.query("select set_config('request.jwt.claim.sub', $1, true)", [uid || ""]);
+      await db.exec(uid ? "set local role authenticated" : "set local role anon");
+      const r = await db.query(sql, params); await db.exec("commit"); return { rows: r.rows };
+    } catch (e) { await db.exec("rollback"); return { error: e.message }; }
+  };
+  console.log("Profiles / login");
+  ok((await as(A, "select display_name, role, email from profiles")).rows[0]?.display_name === "Jordon", "profile auto-created on sign-up with name, email, role=user");
+  ok((await as(A, "select count(*)::int c from profiles")).rows[0].c === 1, "user sees only own profile");
+  ok(!(await as(A, "update profiles set display_name='J', exam_date='2026-12-12' where id=$1", [A])).error, "user can update name + exam date");
+  ok(!!(await as(A, "update profiles set role='admin' where id=$1", [A])).error, "user CANNOT make themselves admin");
+  ok(!!(await as(A, "select admin_user_overview()")).error, "non-admin cannot call admin_user_overview");
+  ok(!!(await as(null, "select * from profiles")).error || (await as(null, "select * from profiles")).rows.length === 0, "anonymous sees no profiles");
+  console.log("Progress sync");
+  ok(!(await as(A, "insert into user_state(user_id,key,value) values ($1,'mcq-stats','{\"x\":1}') on conflict (user_id,key) do update set value=excluded.value", [A])).error, "user saves progress (upsert)");
+  ok(!(await as(A, "insert into user_state(user_id,key,value) values ($1,'mcq-stats','{\"x\":2}') on conflict (user_id,key) do update set value=excluded.value", [A])).error, "user updates progress (upsert again)");
+  ok((await as(A, "select value->>'x' v from user_state where key='mcq-stats'")).rows[0]?.v === "2", "progress reads back latest value");
+  ok((await as(B, "select count(*)::int c from user_state")).rows[0].c === 0, "other user cannot read it");
+  ok(!!(await as(B, "insert into user_state(user_id,key,value) values ($1,'x','1')", [A])).error, "other user cannot write into it");
+  ok(!(await as(A, "insert into question_attempts(user_id,question_id,kind,domain,level,correct,score,source) values ($1,'d1-001','mc',1,'medium',true,1,'study')", [A])).error, "answer logged");
+  ok(!(await as(A, "insert into exam_attempts(user_id,length,difficulty,score,pct,secs,domain_pct) values ($1,'full','all',780,0.85,4000,'{\"1\":0.8}')", [A])).error, "exam result logged");
+  ok((await as(B, "select count(*)::int c from question_attempts")).rows[0].c === 0, "other user cannot see answer log");
+  console.log("Custom questions");
+  const mc = { q: "Which port does LDAPS use?", o: ["636", "389", "443", "22"], a: 0, e: "LDAP over TLS uses 636." };
+  const ins = await as(A, "insert into custom_questions(kind,domain,level,data) values ('mc',4,'medium',$1) returning id, visibility, owner_id", [mc]);
+  ok(ins.rows?.[0]?.visibility === "private" && ins.rows[0].owner_id === A, "user creates a private question (owner auto-set)");
+  const qid = ins.rows[0].id;
+  ok((await as(B, "select count(*)::int c from custom_questions")).rows[0].c === 0, "other user cannot see a private question");
+  ok(!!(await as(A, "insert into custom_questions(kind,domain,data,visibility) values ('mc',1,$1,'public')", [mc])).error, "user CANNOT create a question directly as public");
+  ok(!!(await as(A, "update custom_questions set visibility='public' where id=$1", [qid])).error, "user CANNOT self-publish");
+  ok(!(await as(A, "update custom_questions set visibility='pending' where id=$1", [qid])).error, "user submits for review (pending)");
+  ok(!!(await as(A, "insert into custom_questions(kind,domain,data) values ('mc',1,$1)", [{ q: "x", o: ["a"], a: 5, e: "" }])).error, "malformed question rejected by server validation");
+  ok(!!(await as(A, "insert into custom_questions(kind,domain,data) values ('pbq-match',2,$1)", [{ title: "T test", scenario: "s", task: "t", explain: "e", options: ["A", "B"], rows: [{ l: "1", a: "Z" }, { l: "2", a: "A" }] }])).error, "PBQ row answer must be one of the options");
+  ok(!(await as(A, "insert into custom_questions(kind,domain,data) values ('pbq-order',4,$1)", [{ title: "IR order", scenario: "s", task: "t", explain: "e", items: ["a", "b", "c"] }])).error, "valid ordering PBQ accepted");
+  console.log("Admin");
+  await db.query("update public.profiles set role='admin' where email='jordon@example.com'");  // bootstrap (SQL editor)
+  ok((await as(A, "select is_admin() a")).rows[0].a === true, "bootstrap admin via SQL editor");
+  const qB = (await as(B, "insert into custom_questions(kind,domain,data,visibility) values ('mc',2,$1,'pending') returning id", [mc])).rows[0].id;
+  ok((await as(A, "select count(*)::int c from custom_questions where visibility='pending'")).rows[0].c === 2, "admin sees the review queue");
+  ok(!(await as(A, "update custom_questions set visibility='public', review_note='Nice' where id=$1", [qB])).error, "admin approves (publishes) a question");
+  ok((await as(A, "select reviewed_by from custom_questions where id=$1", [qB])).rows[0].reviewed_by === A, "review is attributed to the admin");
+  const C = await mk("third@example.com", "Third");
+  ok((await as(C, "select count(*)::int c from custom_questions")).rows[0].c === 1, "a third user sees only the public question");
+  ok(!!(await as(C, "update custom_questions set data=data where id=$1 returning id", [qB])).rows?.length === false, "non-owner cannot edit a public question");
+  await as(B, "update custom_questions set data = jsonb_set(data,'{e}','\"edited\"') where id=$1", [qB]);
+  ok((await as(B, "select visibility from custom_questions where id=$1", [qB])).rows[0].visibility === "pending", "author edit of a public question sends it back to review");
+  const ov = await as(A, "select email, role, answers::int from admin_user_overview()");
+  ok(ov.rows?.length === 3 && ov.rows.find(r => r.email === "jordon@example.com").answers === 1, "admin user overview works");
+  ok(!(await as(A, "select admin_set_role($1,'admin')", [B])).error, "admin promotes a user");
+  ok(!(await as(A, "select admin_set_role($1,'user')", [B])).error, "admin demotes a user");
+  ok(!!(await as(A, "select admin_set_role($1,'user')", [A])).error, "cannot demote the last admin");
+  ok(!!(await as(B, "select admin_set_role($1,'admin')", [B])).error, "non-admin cannot use admin_set_role");
+  ok((await as(C, "select count(*)::int c from question_authors(array[$1::uuid])", [B])).rows[0].c === 0, "author names only exposed for public question authors");
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error("FATAL", e.message); process.exit(1); });

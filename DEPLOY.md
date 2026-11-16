@@ -17,7 +17,7 @@ netlify.toml              build settings + security headers
 ## 1. Supabase (≈10 minutes)
 
 1. Create a project at supabase.com (free plan). Pick a region near you and save the database password in your password manager.
-2. **SQL Editor → New query** → paste all of `supabase/migrations/0001_init.sql` → **Run**. This creates the 4 tables, RLS policies, the sign-up trigger and 2 stats views.
+2. **SQL Editor → New query** → paste all of `supabase/migrations/0001_init.sql` → **Run**. Then do the same with `supabase/migrations/0002_roles_custom_questions.sql`, in that order. Together they create the tables, Row Level Security policies, roles, the custom-question review workflow and the admin functions.
 3. **Authentication → Sign In / Providers → Email:** keep Email enabled with **Confirm email** on. Set the minimum password length to 12 if the option is offered.
 4. **Authentication → URL Configuration:**
    - **Site URL:** `https://<your-site>.netlify.app` (set this after step 2 of Netlify, then come back)
@@ -37,9 +37,41 @@ The free plan pauses a project after about a week with no activity. Opening the 
 4. **Deploys → Trigger deploy.** The build log should say `config.js written for https://….supabase.co` and `All questions valid.`
 5. Optionally rename the site (Site configuration → Site details → Change site name), then put that URL into Supabase's Site URL and Redirect URLs (step 1.4).
 
-## 3. First sign-in
+## 3. First sign-in and making yourself admin
 
-Open the site → **Sign in → Create an account** → confirm the email → sign in. Any progress already in that browser is uploaded to your account. Sign in on your phone and the same progress appears.
+1. Open the site → **Sign in → Create an account** → confirm the email → sign in. Any progress already in that browser is uploaded to your account.
+2. Back in Supabase **SQL Editor**, run (with your email):
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.com';
+   ```
+3. Reload the site and the **Admin** tab appears. From there you can promote or demote other users. The app won't let you demote the last admin.
+
+**Who can sign up?** By default anyone with the link can create an account (as a `user`). For a private app, turn off **Authentication → Sign In / Providers → Allow new users to sign up** and invite people from **Authentication → Users → Invite user** instead.
+
+## Roles
+
+| Role | Can do |
+|---|---|
+| `user` | Study, sync progress, write their own questions (private), submit questions for sharing |
+| `admin` | Everything a user can do, plus review/approve/reject submitted questions, unpublish shared questions, see all users with activity stats, change roles |
+
+Roles are enforced in the database (RLS + column privileges + `security definer` functions), not just hidden in the UI. A user can't change their own role, publish their own question, or read anyone else's data, even by calling the API directly.
+
+## User-created questions
+
+- **My questions** tab: build multiple-choice (including "choose two"), matching PBQs (with an optional log/command-output exhibit) and ordering PBQs. Preview with answers before saving.
+- New questions are **private**: they appear only in the author's own bank, tagged *Custom*.
+- **Submit for sharing** puts a question in the admin **Review queue**. Approved questions become **public** and appear for every signed-in user. Admins can also send a question back with a note ("Changes requested").
+- If an author edits a public question, it goes back to the review queue automatically.
+- Everything is validated twice (in the browser and by the database). User text is always escaped, so nobody can inject HTML or scripts.
+
+## Database tests
+
+`tests/db` runs both migrations in embedded Postgres (PGlite) and checks the security rules (35 checks: isolation between users, no self-promotion, no self-publishing, admin workflows, validation):
+
+```bash
+cd tests/db && npm install && npm test
+```
 
 ## Local development
 

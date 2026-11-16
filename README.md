@@ -4,14 +4,16 @@ Interactive practice for the **performance-based questions (PBQs)** on CompTIA S
 
 ## Run it
 
-- **Hosted with accounts (recommended):** Netlify + Supabase. See **DEPLOY.md**.
+- **Hosted with accounts (recommended):** Netlify + Supabase, with user/admin roles and user-created questions. See **DEPLOY.md**.
 - **Local / static only:** serve the `web/` folder with any static host, or `python3 -m http.server --directory web`. Without Supabase settings, progress is saved in the browser, and Export/Import moves it between devices.
 
 ## Project layout
 
 ```
 web/index.html                     Page engine (UI, grading, timer, progress)
-web/app/cloud.js                   Accounts, sync, answer logging (Supabase)
+web/app/cloud.js                   Accounts, roles, sync, answer logging (Supabase)
+web/app/questions-ui.js            My questions (builder) + Admin (review queue, users & roles)
+tests/db/                          Database security tests (PGlite)
 supabase/migrations/               Database schema + RLS
 netlify.toml                       Hosting config + security headers
 web/questions/

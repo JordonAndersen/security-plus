@@ -1,0 +1,7 @@
+{
+  "name": "secplus-db-tests",
+  "private": true,
+  "description": "Runs the Supabase migrations in embedded Postgres (PGlite) and checks Row Level Security, roles and question review rules.",
+  "scripts": { "test": "node rls.test.js" },
+  "devDependencies": { "@electric-sql/pglite": "^0.2.0" }
+}
