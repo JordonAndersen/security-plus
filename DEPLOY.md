@@ -17,7 +17,7 @@ netlify.toml              build settings + security headers
 ## 1. Supabase (≈10 minutes)
 
 1. Create a project at supabase.com (free plan). Pick a region near you and save the database password in your password manager.
-2. **SQL Editor → New query** → paste all of `supabase/migrations/0001_init.sql` → **Run**. Then do the same with `supabase/migrations/0002_roles_custom_questions.sql`, in that order. Together they create the tables, Row Level Security policies, roles, the custom-question review workflow and the admin functions.
+2. **SQL Editor → New query** → paste all of `supabase/migrations/0001_init.sql` → **Run**. Then do the same with `0002_roles_custom_questions.sql`, `0003_lock_trigger_functions.sql` and `0004_fix_validate_grant.sql`, in that order. Together they create the tables, Row Level Security policies, roles, the custom-question review workflow and the admin functions.
 3. **Authentication → Sign In / Providers → Email:** keep Email enabled with **Confirm email** on. Set the minimum password length to 12 if the option is offered.
 4. **Authentication → URL Configuration:**
    - **Site URL:** `https://<your-site>.netlify.app` (set this after step 2 of Netlify, then come back)

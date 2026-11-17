@@ -9,6 +9,8 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? "  ✓ " : "  ✗ "
   await db.exec(fs.readFileSync(path.join(__dirname, "stub.sql"), "utf8"));
   await db.exec(fs.readFileSync(M + "0001_init.sql", "utf8"));
   await db.exec(fs.readFileSync(M + "0002_roles_custom_questions.sql", "utf8"));
+  await db.exec(fs.readFileSync(M + "0003_lock_trigger_functions.sql", "utf8"));
+  await db.exec(fs.readFileSync(M + "0004_fix_validate_grant.sql", "utf8"));
   console.log("migrations applied");
   const mk = async (email, name) => (await db.query("insert into auth.users(email, raw_user_meta_data) values ($1, $2) returning id", [email, { display_name: name }])).rows[0].id;
   const A = await mk("jordon@example.com", "Jordon"), B = await mk("other@example.com", "Other");
