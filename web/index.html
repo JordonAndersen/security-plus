@@ -11,6 +11,7 @@
 (() => { try {
   const c = window.SECPLUS_CONFIG || {}; if (!c.supabaseUrl || !c.supabaseAnonKey) return;
   const ref = new URL(c.supabaseUrl).hostname.split(".")[0];
+  window.__landingHash = location.hash; // Supabase puts link errors here; read before the app rewrites the hash
   if (!localStorage.getItem(`sb-${ref}-auth-token`) && localStorage.getItem("sp:__guest") !== "1") document.documentElement.classList.add("auth-mode");
 } catch (e) {} })();
 </script>

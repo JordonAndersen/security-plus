@@ -181,10 +181,37 @@ window.CLOUD = (() => {
     // Show the sign-in page right away (before the library loads) unless there's a stored session or guest choice
     const ref = (() => { try { return new URL(cfg.supabaseUrl).hostname.split(".")[0]; } catch (e) { return ""; } })();
     const hasSession = !!localStorage.getItem(`sb-${ref}-auth-token`);
+    // Arriving from an email link (confirm / magic link / reset)? Read what Supabase put in the URL.
+    const landingHref = location.href;
+    const qs = new URLSearchParams(location.search);
+    const rawHash = window.__landingHash || location.hash;
+    const hs = new URLSearchParams(rawHash.replace(/^#/, "").includes("=") ? rawHash.slice(1) : "");
+    const landing = {
+      code: qs.has("code"),
+      confirmed: qs.get("confirmed") === "1",
+      error: qs.get("error_description") || hs.get("error_description") || "",
+      errorCode: qs.get("error_code") || hs.get("error_code") || ""
+    };
+    const fromEmail = landing.code || landing.confirmed || !!landing.error;
+    if (fromEmail) localStorage.removeItem(GUEST); // an email link means they want the account, not guest mode
+    if (fromEmail || landing.error) {
+      ["code", "confirmed", "error", "error_code", "error_description"].forEach(k => qs.delete(k));
+      const q = qs.toString();
+      history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + (landing.error ? "" : location.hash));
+    }
+    if (landing.error) {
+      authNotice = { ok: false, text: /expired|otp_expired/i.test(landing.error + landing.errorCode)
+        ? "That email link has expired or was already used. Sign in below, or request a new link."
+        : "That email link didn't work (" + landing.error.replace(/\+/g, " ") + "). Sign in below, or request a new link." };
+    } else if (landing.confirmed) {
+      authNotice = { ok: true, text: "Your email is confirmed. Sign in to continue." };
+    } else if (landing.code) {
+      authNotice = { ok: true, text: "Link accepted. If you opened it in a different browser or app than the one you started in, sign in below." };
+    }
     if (!hasSession && !isGuest()) showAuth("signin"); else hideAuth();
     try { await loadLib(); } catch (e) { lastErr = e.message; setStatus("error"); msg("Couldn't reach the sign-in service. Check your connection and reload."); return; }
     sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
     sb.auth.onAuthStateChange((evt, session) => {
       // Supabase docs: don't await other Supabase calls inside this callback (can deadlock) — defer them.
@@ -192,10 +219,20 @@ window.CLOUD = (() => {
       if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; localStorage.removeItem(GUEST); hideAuth(); setStatus("syncing"); setTimeout(() => afterLogin(true), 0); }
       if (evt === "SIGNED_OUT") { const hadCustom = !!localStorage.getItem(CQ); user = null; profile = null; localStorage.removeItem(CQ); setStatus("signed-out"); renderTabs(); showAuth("signin"); if (hadCustom) setTimeout(() => location.reload(), 0); }
     });
-    const { data } = await sb.auth.getSession();
-    // Clean ?code=… left by magic-link / reset redirects (PKCE)
-    if (/[?&]code=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
-    if (data.session?.user && !user) { user = data.session.user; hideAuth(); setStatus("syncing"); await afterLogin(false); }
+    // The library reads ?code= on load; we already removed it from the address bar, so hand it over explicitly.
+    let data = { session: null };
+    if (landing.code) {
+      const code = new URL(landingHref).searchParams.get("code");
+      try { const r = await sb.auth.exchangeCodeForSession(code); if (r.data?.session) data = r.data; } catch (e) { /* verifier lives in another browser — fall through to sign-in */ }
+    }
+    if (!data.session) ({ data } = await sb.auth.getSession());
+    // First sign-in may reload the page to pull synced progress, so carry the toast across the reload
+    if (data.session?.user && landing.confirmed) sessionStorage.setItem("sp:__toast", "Email confirmed — you're signed in.");
+    const pendingToast = sessionStorage.getItem("sp:__toast");
+    // Clear it only after it has been on screen a few seconds, so a reload in between shows it again
+    if (pendingToast && (data.session?.user || user)) setTimeout(() => { toast(pendingToast); setTimeout(() => sessionStorage.removeItem("sp:__toast"), 4000); }, 300);
+    if (data.session?.user && !user) { user = data.session.user; authNotice = null; hideAuth(); setStatus("syncing"); await afterLogin(false); }
+    else if (user && landing.confirmed) authNotice = null;
     else if (!user) { setStatus("signed-out"); if (!isGuest()) showAuth(authView); }
     // Catch changes from other devices when you come back to this tab
     document.addEventListener("visibilitychange", async () => {
@@ -207,7 +244,7 @@ window.CLOUD = (() => {
   const redirectTo = () => location.origin + location.pathname;
   async function signIn(email, password) { const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; }
   async function signUp(email, password, name) {
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name }, emailRedirectTo: redirectTo() } });
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name }, emailRedirectTo: redirectTo() + "?confirmed=1" } });
     if (error) throw error;
     return data.session ? "signed-in" : "confirm";
   }
@@ -286,6 +323,7 @@ window.CLOUD = (() => {
 
   // --- Full-page sign-in / sign-up (first screen when cloud sync is configured) ---
   let authView = "signin";
+  let authNotice = null; // message shown on the sign-in page after arriving from an email link
   function field(id, label, type = "text", val = "", extra = "") { return `<label class="f"><span>${label}</span><input id="${id}" type="${type}" value="${h(val)}" ${extra}></label>`; }
   function showAuth(v) {
     if (!configured) return;
@@ -324,6 +362,7 @@ window.CLOUD = (() => {
         <div class="merr" id="acct-msg"></div>
         ${allowGuest ? `<hr><button class="linkbtn" data-acct="guest">Continue without an account →</button><p class="muted" style="margin:4px 0 0">Progress is saved in this browser only. You can create an account later.</p>` : ""}
       </section></div>`;
+    if (authNotice) msg(authNotice.text, authNotice.ok);
     const first = pg.querySelector("input"); if (first) first.focus();
   }
   function hideAuth() { document.documentElement.classList.remove("auth-mode"); }
@@ -351,7 +390,7 @@ window.CLOUD = (() => {
   const goAccount = () => { if (window.setTab) setTab("account"); };
 
   document.addEventListener("click", async e => {
-    const v = e.target.closest("[data-acct-view]"); if (v) { e.preventDefault(); return showAuth(v.dataset.acctView); }
+    const v = e.target.closest("[data-acct-view]"); if (v) { e.preventDefault(); authNotice = null; return showAuth(v.dataset.acctView); }
     const b = e.target.closest("[data-acct]"); if (!b) return;
     const a = b.dataset.acct;
     try {
