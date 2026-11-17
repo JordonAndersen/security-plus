@@ -13,6 +13,7 @@ Interactive practice for the **performance-based questions (PBQs)** on CompTIA S
 web/index.html                     Page engine (UI, grading, timer, progress)
 web/app/cloud.js                   Accounts, roles, sync, answer logging (Supabase)
 web/app/questions-ui.js            My questions (builder) + Admin (review queue, users & roles)
+web/app/account-ui.js              Account page: countdown, readiness, metrics, last 3 exams, activity, settings
 tests/db/                          Database security tests (PGlite)
 supabase/migrations/               Database schema + RLS
 netlify.toml                       Hosting config + security headers

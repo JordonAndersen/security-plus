@@ -176,23 +176,27 @@ window.CLOUD = (() => {
     });
   }
   async function init() {
-    renderAcct(); renderTabs();
-    if (!configured) return;
-    try { await loadLib(); } catch (e) { lastErr = e.message; setStatus("error"); return; }
+    renderAcct(); renderTabs(); deployWarning();
+    if (!configured) { hideAuth(); return; }
+    // Show the sign-in page right away (before the library loads) unless there's a stored session or guest choice
+    const ref = (() => { try { return new URL(cfg.supabaseUrl).hostname.split(".")[0]; } catch (e) { return ""; } })();
+    const hasSession = !!localStorage.getItem(`sb-${ref}-auth-token`);
+    if (!hasSession && !isGuest()) showAuth("signin"); else hideAuth();
+    try { await loadLib(); } catch (e) { lastErr = e.message; setStatus("error"); msg("Couldn't reach the sign-in service. Check your connection and reload."); return; }
     sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
       auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
     sb.auth.onAuthStateChange((evt, session) => {
       // Supabase docs: don't await other Supabase calls inside this callback (can deadlock) — defer them.
       if (evt === "PASSWORD_RECOVERY") { user = session?.user || null; setTimeout(() => openModal("newpw"), 0); return; }
-      if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; setStatus("syncing"); setTimeout(() => afterLogin(true), 0); }
-      if (evt === "SIGNED_OUT") { const hadCustom = !!localStorage.getItem(CQ); user = null; profile = null; localStorage.removeItem(CQ); setStatus("signed-out"); renderTabs(); if (hadCustom) setTimeout(() => location.reload(), 0); }
+      if (evt === "SIGNED_IN" && session?.user && (!user || user.id !== session.user.id)) { user = session.user; localStorage.removeItem(GUEST); hideAuth(); setStatus("syncing"); setTimeout(() => afterLogin(true), 0); }
+      if (evt === "SIGNED_OUT") { const hadCustom = !!localStorage.getItem(CQ); user = null; profile = null; localStorage.removeItem(CQ); setStatus("signed-out"); renderTabs(); showAuth("signin"); if (hadCustom) setTimeout(() => location.reload(), 0); }
     });
     const { data } = await sb.auth.getSession();
     // Clean ?code=… left by magic-link / reset redirects (PKCE)
     if (/[?&]code=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
-    if (data.session?.user && !user) { user = data.session.user; setStatus("syncing"); await afterLogin(false); }
-    else if (!user) setStatus("signed-out");
+    if (data.session?.user && !user) { user = data.session.user; hideAuth(); setStatus("syncing"); await afterLogin(false); }
+    else if (!user) { setStatus("signed-out"); if (!isGuest()) showAuth(authView); }
     // Catch changes from other devices when you come back to this tab
     document.addEventListener("visibilitychange", async () => {
       if (!user) return;
@@ -201,7 +205,7 @@ window.CLOUD = (() => {
     });
   }
   const redirectTo = () => location.origin + location.pathname;
-  async function signIn(email, password) { const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; closeModal(); }
+  async function signIn(email, password) { const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; }
   async function signUp(email, password, name) {
     const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name }, emailRedirectTo: redirectTo() } });
     if (error) throw error;
@@ -210,7 +214,7 @@ window.CLOUD = (() => {
   async function magic(email) { const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo() } }); if (error) throw error; }
   async function forgot(email) { const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo() }); if (error) throw error; }
   async function newPassword(pw) { const { error } = await sb.auth.updateUser({ password: pw }); if (error) throw error; }
-  async function signOut() { await push(); await sb.auth.signOut(); user = null; closeModal(); setStatus("signed-out"); }
+  async function signOut() { await push(); await sb.auth.signOut(); user = null; setStatus("signed-out"); localStorage.removeItem(GUEST); showAuth("signin"); }
   async function saveProfile(name, date) {
     jset(P + "exam-date", date || null); changed("exam-date");
     if (user) {
@@ -250,56 +254,90 @@ window.CLOUD = (() => {
   }
 
   // ---------------- UI ----------------
+  const allowGuest = cfg.allowGuest !== false;
+  const GUEST = P + "__guest";
+  const isGuest = () => localStorage.getItem(GUEST) === "1";
   function daysLeft() {
     const raw = jget(P + "exam-date", null); if (!raw) return null; const d = String(raw).slice(0, 10);
     const t = new Date(d + "T12:00:00"), n = new Date(); n.setHours(12,0,0,0);
     return Math.round((t - n) / 86400000);
   }
-  function setStatus(s) { status = s; renderAcct(); if (view === "account") renderModal(); }
+  function setStatus(s) { status = s; renderAcct(); document.dispatchEvent(new CustomEvent("cloud:status")); }
   const STATUS = { local: "Saved in this browser", "signed-out": "Not signed in", syncing: "Syncing…", synced: "Synced", error: "Sync error" };
   function renderAcct() {
     const el = $("#acct"); if (!el) return;
     const dl = daysLeft();
     const cd = dl == null ? "" : `<span class="chip countdown ${dl <= 7 ? "lvl-hard" : ""}" title="Exam date">${dl > 0 ? dl + (dl === 1 ? " day" : " days") + " to exam" : dl === 0 ? "Exam day — good luck" : "Exam date passed"}</span>`;
-    const label = user ? h((profile && profile.display_name) || user.email.split("@")[0]) : configured ? "Sign in" : "Progress";
+    const label = user ? h((profile && profile.display_name) || user.email.split("@")[0]) : configured ? "Sign in" : "Account";
     const dot = { local: "", "signed-out": "", syncing: "dot-sync", synced: "dot-ok", error: "dot-err" }[status];
     el.innerHTML = `${cd}<button class="acct-btn" data-acct="open" title="${h(STATUS[status])}">${dot ? `<i class="dot ${dot}"></i>` : ""}${label}</button>`;
   }
-  function openModal(v) { view = v || (configured ? (user ? "account" : "signin") : "local"); renderModal(); }
-  function closeModal() { view = null; const m = $("#acct-modal"); if (m) m.remove(); }
+
+  // --- Misconfigured deploy warning (e.g. drag-and-drop deploy, or env vars missing) ---
+  function deployWarning() {
+    const emptyCfg = window.SECPLUS_CONFIG && !configured;
+    const hosted = /\.netlify\.app$/.test(location.hostname);
+    if (configured || !(emptyCfg || hosted) || $("#cfg-warning")) return;
+    const b = document.createElement("div"); b.id = "cfg-warning"; b.className = "cfg-warning";
+    b.innerHTML = `<b>Sign-in is off on this deploy.</b> It was published without Supabase settings, so progress is saved in this browser only.
+      Fix: in Netlify, link the site to the GitHub repo, set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code>, then trigger a new deploy (drag-and-drop deploys skip the build step).`;
+    document.body.prepend(b);
+  }
+
+  // --- Full-page sign-in / sign-up (first screen when cloud sync is configured) ---
+  let authView = "signin";
   function field(id, label, type = "text", val = "", extra = "") { return `<label class="f"><span>${label}</span><input id="${id}" type="${type}" value="${h(val)}" ${extra}></label>`; }
-  function renderModal() {
+  function showAuth(v) {
+    if (!configured) return;
+    authView = v || authView || "signin";
+    document.documentElement.classList.add("auth-mode");
+    let pg = $("#auth-page");
+    if (!pg) { pg = document.createElement("div"); pg.id = "auth-page"; document.body.appendChild(pg); }
+    const forms = {
+      signin: `<h2>Sign in</h2>
+        ${field("acct-email","Email","email","",'autocomplete="email" required')}${field("acct-pw","Password","password","",'autocomplete="current-password" required')}
+        <div class="mrow"><button class="btn primary wide" data-acct="signin">Sign in</button></div>
+        <div class="mrow"><button class="btn wide" data-acct="magic">Email me a one-time sign-in link</button></div>
+        <p class="muted auth-links"><a href="#" data-acct-view="signup">Create an account</a> · <a href="#" data-acct-view="forgot">Forgot password?</a></p>`,
+      signup: `<h2>Create your account</h2>
+        ${field("acct-name","Display name","text","",'maxlength="60" autocomplete="nickname"')}${field("acct-email","Email","email","",'autocomplete="email" required')}
+        ${field("acct-pw","Password (12+ characters)","password","",'autocomplete="new-password" minlength="12" required')}
+        <div class="mrow"><button class="btn primary wide" data-acct="signup">Create account</button></div>
+        <p class="muted">You'll get an email to confirm your address. Any progress already in this browser is uploaded to your account.</p>
+        <p class="muted auth-links"><a href="#" data-acct-view="signin">I already have an account</a></p>`,
+      forgot: `<h2>Reset your password</h2>${field("acct-email","Email","email","",'autocomplete="email" required')}
+        <div class="mrow"><button class="btn primary wide" data-acct="forgot">Send reset link</button></div>
+        <p class="muted auth-links"><a href="#" data-acct-view="signin">Back to sign in</a></p>`
+    };
+    pg.innerHTML = `<div class="auth-wrap">
+      <section class="auth-pitch">
+        <div class="auth-brand">Security+ Practice Lab</div>
+        <h1>Pass SY0-701 with practice that looks like the real exam.</h1>
+        <ul>
+          <li><b>Performance-based questions</b> including a live command-line terminal, log triage and network builds</li>
+          <li><b>Timed practice exams</b> weighted to the official domain percentages, with a scaled score estimate</li>
+          <li><b>Hundreds of multiple-choice questions</b> with explanations, a hard-only cram mode and an acronym quiz</li>
+          <li><b>Your progress follows you</b> across devices, with an account dashboard and countdown to exam day</li>
+        </ul>
+      </section>
+      <section class="auth-card" role="form" aria-label="Account">${forms[authView] || forms.signin}
+        <div class="merr" id="acct-msg"></div>
+        ${allowGuest ? `<hr><button class="linkbtn" data-acct="guest">Continue without an account →</button><p class="muted" style="margin:4px 0 0">Progress is saved in this browser only. You can create an account later.</p>` : ""}
+      </section></div>`;
+    const first = pg.querySelector("input"); if (first) first.focus();
+  }
+  function hideAuth() { document.documentElement.classList.remove("auth-mode"); }
+
+  // --- Small modal kept only for the password-recovery link ---
+  function openModal(v) {
+    if (v !== "newpw") return;
     let m = $("#acct-modal");
     if (!m) { m = document.createElement("div"); m.id = "acct-modal"; m.className = "modal-bg"; document.body.appendChild(m); }
-    const date = jget(P + "exam-date", "") || "";
-    const progress = `<div class="mrow"><button class="btn" data-acct="export">Export progress</button>
-        <label class="btn" style="display:inline-block">Import progress<input type="file" accept="application/json" id="acct-import" hidden></label></div>`;
-    const body = {
-      local: `<h3>Your progress</h3><p class="muted">Cloud sync isn't configured on this copy, so progress is saved in this browser only. Use export/import to back it up or move it to another device.</p>
-        ${field("acct-date","Exam date","date",date)}<div class="mrow"><button class="btn primary" data-acct="savelocal">Save</button></div><hr>${progress}`,
-      signin: `<h3>Sign in</h3><p class="muted">Sync your progress across devices.</p>
-        ${field("acct-email","Email","email","",'autocomplete="email"')}${field("acct-pw","Password","password","",'autocomplete="current-password"')}
-        <div class="mrow"><button class="btn primary" data-acct="signin">Sign in</button><button class="btn" data-acct="magic">Email me a sign-in link</button></div>
-        <p class="muted"><a href="#" data-acct-view="signup">Create an account</a> · <a href="#" data-acct-view="forgot">Forgot password?</a></p>`,
-      signup: `<h3>Create account</h3>
-        ${field("acct-name","Display name","text","",'maxlength="60" autocomplete="nickname"')}${field("acct-email","Email","email","",'autocomplete="email"')}
-        ${field("acct-pw","Password (12+ characters)","password","",'autocomplete="new-password" minlength="12"')}
-        <div class="mrow"><button class="btn primary" data-acct="signup">Create account</button></div>
-        <p class="muted">Progress you've already made in this browser will be uploaded to your account. <a href="#" data-acct-view="signin">Back to sign in</a></p>`,
-      forgot: `<h3>Reset password</h3>${field("acct-email","Email","email","",'autocomplete="email"')}
-        <div class="mrow"><button class="btn primary" data-acct="forgot">Send reset link</button></div><p class="muted"><a href="#" data-acct-view="signin">Back to sign in</a></p>`,
-      newpw: `<h3>Choose a new password</h3>${field("acct-pw","New password (12+ characters)","password","",'autocomplete="new-password" minlength="12"')}
-        <div class="mrow"><button class="btn primary" data-acct="newpw">Update password</button></div>`,
-      account: user ? `<h3>Account</h3><p class="muted">${h(user.email)} · <span class="sync-${status}">${h(STATUS[status])}</span>${status === "error" && lastErr ? ` — ${h(lastErr)}` : ""}</p>
-        ${field("acct-name","Display name","text",(profile && profile.display_name) || "",'maxlength="60"')}${field("acct-date","Exam date","date",date)}
-        <div class="mrow"><button class="btn primary" data-acct="saveprofile">Save profile</button><button class="btn" data-acct="syncnow">Sync now</button></div><hr>${progress}<hr>
-        <details><summary class="muted">Danger zone</summary><p class="muted">Deletes all progress, answer history and exam history on every device. Type RESET to confirm.</p>
-        <div class="mrow"><input id="acct-reset" placeholder="RESET" style="max-width:140px"><button class="btn" data-acct="reset">Delete my progress</button></div></details>
-        <div class="mrow" style="margin-top:14px"><button class="btn" data-acct="signout">Sign out</button></div>` : ""
-    }[view] || "";
-    m.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><button class="mclose" data-acct="close" aria-label="Close">×</button>${body}<div class="merr" id="acct-msg"></div></div>`;
-    const first = m.querySelector("input:not([type=file])"); if (first) first.focus();
+    m.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><h3>Choose a new password</h3>${field("acct-pw","New password (12+ characters)","password","",'autocomplete="new-password" minlength="12"')}
+      <div class="mrow"><button class="btn primary" data-acct="newpw">Update password</button></div><div class="merr" id="acct-msg"></div></div>`;
+    hideAuth();
   }
+  function closeModal() { const m = $("#acct-modal"); if (m) m.remove(); }
   function msg(t, ok) { const e = $("#acct-msg"); if (e) { e.textContent = t; e.className = "merr" + (ok ? " ok" : ""); } }
   function toast(text, btn, fn) {
     let t = $("#acct-toast"); if (t) t.remove();
@@ -310,45 +348,56 @@ window.CLOUD = (() => {
     t.querySelector(".mclose").onclick = () => t.remove();
   }
   const val = id => ($("#" + id) || {}).value || "";
+  const goAccount = () => { if (window.setTab) setTab("account"); };
 
   document.addEventListener("click", async e => {
-    const v = e.target.closest("[data-acct-view]"); if (v) { e.preventDefault(); view = v.dataset.acctView; return renderModal(); }
-    if (e.target.id === "acct-modal") return closeModal();
+    const v = e.target.closest("[data-acct-view]"); if (v) { e.preventDefault(); return showAuth(v.dataset.acctView); }
     const b = e.target.closest("[data-acct]"); if (!b) return;
     const a = b.dataset.acct;
     try {
-      if (a === "open") return openModal();
-      if (a === "close") return closeModal();
-      if (a === "export") return exportData();
-      if (a === "savelocal") { await saveProfile(null, val("acct-date")); return msg("Saved.", true); }
-      if (a === "signin") { b.disabled = true; await signIn(val("acct-email").trim(), val("acct-pw")); return; }
+      if (a === "open") { if (configured && !user) { localStorage.removeItem(GUEST); return showAuth("signin"); } return goAccount(); }
+      if (a === "signup-page") { localStorage.removeItem(GUEST); return showAuth("signup"); }
+      if (a === "guest") { localStorage.setItem(GUEST, "1"); hideAuth(); renderAcct(); return; }
+      if (a === "signin") {
+        if (!val("acct-email") || !val("acct-pw")) return msg("Enter your email and password.");
+        if (!sb) return msg(lastErr || "Still connecting — try again in a moment.");
+        b.disabled = true; await signIn(val("acct-email").trim(), val("acct-pw")); return;
+      }
       if (a === "magic") { if (!val("acct-email")) return msg("Enter your email first."); await magic(val("acct-email").trim()); return msg("Check your email for a sign-in link.", true); }
       if (a === "signup") {
+        if (!val("acct-email")) return msg("Enter your email.");
         if (val("acct-pw").length < 12) return msg("Use at least 12 characters.");
+        b.disabled = true;
         const r = await signUp(val("acct-email").trim(), val("acct-pw"), val("acct-name").trim());
-        if (r === "confirm") return msg("Check your email to confirm your account, then sign in.", true);
-        return closeModal();
+        b.disabled = false;
+        if (r === "confirm") return msg("Check your email to confirm your account, then sign in here.", true);
+        return;
       }
-      if (a === "forgot") { await forgot(val("acct-email").trim()); return msg("If that account exists, a reset link is on its way.", true); }
-      if (a === "newpw") { if (val("acct-pw").length < 12) return msg("Use at least 12 characters."); await newPassword(val("acct-pw")); view = "account"; renderModal(); return msg("Password updated.", true); }
-      if (a === "saveprofile") { await saveProfile(val("acct-name").trim(), val("acct-date")); return msg("Profile saved.", true); }
-      if (a === "syncnow") { await push(); if (await pull()) applyRemote(false); return msg("Up to date.", true); }
-      if (a === "signout") return signOut();
-      if (a === "reset") { if (val("acct-reset") !== "RESET") return msg("Type RESET to confirm."); return resetAll(); }
+      if (a === "forgot") { if (!val("acct-email")) return msg("Enter your email."); await forgot(val("acct-email").trim()); return msg("If that account exists, a reset link is on its way.", true); }
+      if (a === "newpw") { if (val("acct-pw").length < 12) return msg("Use at least 12 characters."); await newPassword(val("acct-pw")); closeModal(); toast("Password updated."); goAccount(); return; }
     } catch (err) { msg(err.message || String(err)); b.disabled = false; }
   });
-  document.addEventListener("change", async e => {
-    if (e.target.id !== "acct-import" || !e.target.files[0]) return;
-    try { await importData(e.target.files[0]); } catch (err) { msg(err.message); }
-  });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && view) closeModal();
-    if (e.key === "Enter" && view && e.target.closest && e.target.closest("#acct-modal input")) {
-      const primary = $("#acct-modal .btn.primary"); if (primary) { e.preventDefault(); primary.click(); }
+    if (e.key === "Escape" && $("#acct-modal")) closeModal();
+    if (e.key === "Enter" && e.target.closest && e.target.closest("#auth-page input, #acct-modal input")) {
+      const primary = (e.target.closest("#auth-page") || e.target.closest("#acct-modal")).querySelector(".btn.primary"); if (primary) { e.preventDefault(); primary.click(); }
     }
   });
 
-  const api = { changed, log, exam, init, configured: () => configured, user: () => user, isAdmin, profile: () => profile, questions: Q, toast, _status: () => status };
+  // Recent activity for the dashboard (signed-in users): answers per day
+  async function activity(days = 14) {
+    if (!user || !sb) return null;
+    await flushLogs();   // upload any answers still queued in this browser so the chart is current
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const { data, error } = await sb.from("question_attempts").select("answered_at,correct").gte("answered_at", since);
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+  async function syncNow() { await push(); if (await pull()) applyRemote(false); }
+
+  const api = { changed, log, exam, init, configured: () => configured, user: () => user, isAdmin, profile: () => profile, questions: Q, toast,
+    isGuest, showAuth, signOut, saveProfile, changePassword: newPassword, exportData, importData, resetAll, syncNow, activity, daysLeft,
+    statusLabel: () => STATUS[status], lastError: () => lastErr, _status: () => status };
   setTimeout(init, 0);
   return api;
 })();

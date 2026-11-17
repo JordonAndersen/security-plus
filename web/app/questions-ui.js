@@ -253,5 +253,5 @@
 
   window.MINE = { home };
   window.ADMIN = { home: adminHome };
-  if (window.__pendingTab) { const t = window.__pendingTab; window.__pendingTab = null; setTab(t); }
+  if (window.__pendingTab === "mine" || window.__pendingTab === "admin") { const t = window.__pendingTab; window.__pendingTab = null; setTab(t); }
 })();

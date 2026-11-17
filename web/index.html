@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Security+ PBQ Practice Lab</title>
+<!-- Cloud settings (generated at deploy from env vars; absent on local copies) -->
+<script src="config.js"></script>
+<script>
+// Show the sign-in page first when cloud sync is configured and there's no session / guest choice yet.
+(() => { try {
+  const c = window.SECPLUS_CONFIG || {}; if (!c.supabaseUrl || !c.supabaseAnonKey) return;
+  const ref = new URL(c.supabaseUrl).hostname.split(".")[0];
+  if (!localStorage.getItem(`sb-${ref}-auth-token`) && localStorage.getItem("sp:__guest") !== "1") document.documentElement.classList.add("auth-mode");
+} catch (e) {} })();
+</script>
 <style>
 :root{
   --bg:#f4f5f7;--panel:#fff;--ink:#1d2330;--muted:#5d6676;--line:#dde1e7;
@@ -119,6 +129,41 @@ select.bad,input.bad{border-color:var(--bad);background:var(--bad-bg)}
 .review .yours{font-size:13px}
 .muted{color:var(--muted);font-size:13px}
 .chip-custom{background:#e8e3ff;color:#4b3aa8}
+/* --- sign-in page --- */
+#auth-page{display:none}
+.auth-mode header .tabs,.auth-mode header .score,.auth-mode header .acct,.auth-mode .wrap{display:none!important}
+.auth-mode #auth-page{display:block}
+.auth-wrap{max-width:1040px;margin:0 auto;padding:48px 24px 60px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:start}
+.auth-brand{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.auth-pitch h1{font-size:34px;line-height:1.15;margin:10px 0 18px}
+.auth-pitch ul{padding-left:20px;margin:0;line-height:1.6}.auth-pitch li{margin:8px 0}
+.auth-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 26px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+.auth-card h2{margin:0 0 6px}.auth-card hr{border:0;border-top:1px solid var(--line);margin:18px 0 12px}
+.auth-card .f{display:block;margin:12px 0}.auth-card .f span{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.auth-card input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+.btn.wide{width:100%}.auth-links{margin-top:14px}
+.linkbtn{background:none;border:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;padding:0}
+.cfg-warning{background:#fff3d6;color:#5c3d00;border-bottom:1px solid #e6c97a;padding:10px 22px;font-size:13.5px}
+@media (prefers-color-scheme:dark){.cfg-warning{background:#3a2e10;color:#ffdf9a;border-color:#5c4a1c}}
+@media (max-width:820px){.auth-wrap{grid-template-columns:1fr;padding:24px 16px}.auth-pitch h1{font-size:26px}}
+/* --- account dashboard --- */
+.acc-top{display:grid;grid-template-columns:1fr 2fr;gap:14px}
+.acc-top .card{margin-bottom:0}.cd{text-align:center}.cd-num{font-size:52px;font-weight:750;line-height:1.05}
+.ready-v{font-size:34px;font-weight:750;margin:2px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ready.tone-ok{border-left:4px solid var(--ok)}.ready.tone-mid{border-left:4px solid #c98a00}.ready.tone-bad{border-left:4px solid var(--bad)}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.tile-v{font-size:26px;font-weight:750}.tile-l{font-size:13px;font-weight:600;margin-top:2px}.tile-s{font-size:12px;color:var(--muted);margin-top:4px}
+.row label.f2{display:flex;flex-direction:column;align-items:stretch;gap:4px;text-align:left}
+.f2 input[type=text],.f2 input[type=date],.f2 input[type=password]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-weight:400}
+.domtbl td{vertical-align:middle}.domtbl .bar{width:140px;display:inline-block;vertical-align:middle}
+td.mini{display:flex;gap:3px;align-items:flex-end;height:40px}
+.mini-b{width:10px;border-radius:2px;background:var(--ok);display:inline-block}.mini-b.mid{background:#c98a00}.mini-b.low{background:var(--bad)}.mini-b.none{height:4px;background:var(--line)}
+.act{display:flex;gap:6px;align-items:flex-end;height:96px;padding-top:6px}
+.act-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.act-bar{width:100%;max-width:26px;background:var(--accent);border-radius:4px 4px 0 0;min-height:2px}
+.act-d{font-size:11px;color:var(--muted);margin-top:4px}
+@media (max-width:900px){.acc-top{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}}
 .btn.sm{padding:5px 10px;font-size:13px}.btn.danger{border-color:var(--bad);color:var(--bad)}
 .vis-pending{background:#fff3d6;color:#8a5a00}.vis-public{background:var(--ok-bg);color:var(--ok)}.vis-rejected{background:var(--bad-bg);color:var(--bad)}
 table.qlist td{font-size:14px;vertical-align:top}.qact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -259,7 +304,7 @@ window.PBQ = {
 <body>
 <header>
   <h1>Security+ PBQ Practice Lab</h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="admin" hidden>Admin</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="account">Account</button><button class="tab" data-tab="admin" hidden>Admin</button></span>
   <span class="score" id="score"></span>
   <span class="acct" id="acct"></span>
 </header>
@@ -454,11 +499,13 @@ function setTab(t){
   TAB=t; clearInterval(timerId);
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
   document.querySelector(".wrap").classList.toggle("single",t!=="pbq"&&t!=="crash");
+  window.TAB_NOW=t;
   if(t==="mcq"){ try{history.replaceState(null,"","#mcq")}catch(e){} MC.home(); }
   else if(t==="exam"){ try{history.replaceState(null,"","#exam")}catch(e){} EX.home(); }
   else if(t==="ref"){ try{history.replaceState(null,"","#ref")}catch(e){} REF.home(); }
   else if(t==="crash"){ CC.home(); }
   else if(t==="mine"){ try{history.replaceState(null,"","#mine")}catch(e){} MINE.home(); }
+  else if(t==="account"){ try{history.replaceState(null,"","#account")}catch(e){} ACCOUNT.home(); }
   else if(t==="admin"){ try{history.replaceState(null,"","#admin")}catch(e){} ADMIN.home(); }
   else { if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded.</div>'; return; } go(cur); }
   window.scrollTo(0,0);
@@ -746,7 +793,7 @@ const EX = (() => {
         window.CLOUD&&CLOUD.log({question_id:it.q.id, kind:"pbq", domain:it.q.domain, level:lvl(it.q), correct:g[k].ok, score:+g[k].frac.toFixed(3), source:"exam"}); } });
     store.set("pbq-status",status);
     const pct=P?E/P:0, sc=scaled(pct), domPct={}; for(const d in dom) domPct[d]=dom[d].e/dom[d].p;
-    hist.push({d:Date.now(), len:X.len, score:sc, pct, secs, dom:domPct}); hist=hist.slice(-50); store.set("exam-history",hist);
+    hist.push({d:Date.now(), len:X.len, lvl:xlvl, score:sc, pct, secs, dom:domPct}); hist=hist.slice(-50); store.set("exam-history",hist);
     window.CLOUD&&CLOUD.exam({length:X.len, difficulty:xlvl, score:sc, pct:+pct.toFixed(4), secs, domain_pct:domPct});
     const pass=sc>=PASS;
     $("#score").textContent = `${hist.length} exam${hist.length>1?"s":""} taken · best ${Math.max(...hist.map(h=>h.score))}`;
@@ -1075,12 +1122,12 @@ function cur_set(i){ cur=i; }
 
 // Initial route
 (() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
-  if(h==="mine"||h==="admin"){ window.__pendingTab=h; return setTab("pbq"); }   // opened by app/questions-ui.js once it loads
+  if(h==="mine"||h==="admin"||h==="account"){ window.__pendingTab=h; return setTab("pbq"); }   // opened by app/*-ui.js once they load
   if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
-<!-- Cloud sync (optional): config.js is generated at deploy time from environment variables -->
-<script src="config.js"></script>
+<!-- Cloud sync, question builder/admin, account dashboard -->
 <script src="app/cloud.js"></script>
 <script src="app/questions-ui.js"></script>
+<script src="app/account-ui.js"></script>
 </body>
 </html>

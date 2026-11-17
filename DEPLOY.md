@@ -34,10 +34,14 @@ The free plan pauses a project after about a week with no activity. Opening the 
 3. **Site configuration → Environment variables:**
    - `SUPABASE_URL` = your Project URL
    - `SUPABASE_ANON_KEY` = your anon/publishable key
+   - optional `ALLOW_GUEST` = `false` hides "Continue without an account", so everyone must sign in (default: guests allowed)
+   - Leave **"Contains secret values"** unchecked. These values are public by design and appear in the built site, so Netlify's secret scanning would otherwise flag your own build.
 4. **Deploys → Trigger deploy.** The build log should say `config.js written for https://….supabase.co` and `All questions valid.`
 5. Optionally rename the site (Site configuration → Site details → Change site name), then put that URL into Supabase's Site URL and Redirect URLs (step 1.4).
 
 ## 3. First sign-in and making yourself admin
+
+The **sign-in page is the first screen**. Visitors can sign in, create an account, get a one-time email link, reset a password, or (unless `ALLOW_GUEST=false`) continue as a guest with browser-only progress. If a deploy is missing its Supabase settings (for example, a drag-and-drop deploy, which skips the build step), the site shows a yellow warning banner instead of a sign-in page.
 
 1. Open the site → **Sign in → Create an account** → confirm the email → sign in. Any progress already in that browser is uploaded to your account.
 2. Back in Supabase **SQL Editor**, run (with your email):
