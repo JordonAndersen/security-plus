@@ -720,6 +720,39 @@ mark{background:var(--warn-bg);color:var(--warn-ink);border-radius:3px}
   .revq-i{flex-wrap:wrap}
   .modal-bg{padding:24px 12px}
 }
+
+/* --- Learn pages --- */
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:24px}
+.ldom{font-size:16px;font-weight:600;margin:24px 0 10px}
+.lcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px 16px;text-align:left;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);color:var(--ink);font:inherit;cursor:pointer;box-shadow:var(--shadow-xs);transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.lcard:hover{border-color:var(--accent);box-shadow:var(--shadow-sm)}
+.lcard.weak{border-left:3px solid var(--warn)}
+.lcode{font:600 13px var(--mono);color:var(--accent)}
+.lcode.big{font-size:22px;margin-right:6px}
+.lname{font-weight:600;font-size:15px;line-height:1.35}
+.lmeta{font-size:13px;color:var(--muted)}
+.lflags{display:flex;gap:6px;flex-wrap:wrap}
+.lflags:empty{display:none}
+.lweak{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.lweak .btn{height:auto;min-height:40px;padding:8px 12px;white-space:normal;text-align:left}
+.lsum{font-size:17px;line-height:1.65;margin:0 0 18px}
+.lbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px}
+.lstat{font-size:15px}
+.ldone{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.ldl{display:grid;gap:0;margin:0}
+.ldl > div{display:grid;grid-template-columns:minmax(150px,30%) 1fr;gap:16px;padding:10px 0;border-top:1px solid var(--line)}
+.ldl > div:first-child{border-top:0}
+.ldl dt{font-weight:600}
+.ldl dd{margin:0;color:var(--ink);line-height:1.55}
+.ltraps li,.ltips li{margin:8px 0;line-height:1.55}
+.ltraps{border-left:3px solid var(--warn)}
+.lpbqs{display:flex;flex-wrap:wrap;gap:8px}
+.lpbqs .btn{height:auto;min-height:40px;padding:8px 14px;white-space:normal;text-align:left}
+.lback{cursor:pointer;border:0;font-family:inherit}
+.lback:hover{color:var(--ink)}
+.learn-link{margin-right:16px}
+.fb-foot{display:flex;flex-wrap:wrap;gap:6px 16px}
+@media (max-width:700px){.ldl > div{grid-template-columns:1fr;gap:2px}.lsum{font-size:16px}}
 </style>
 <script>
 // Question registry. Each file in /questions calls PBQ.add([...]).
@@ -732,7 +765,8 @@ window.PBQ = {
   addPorts(list){ this.ports.push(...list); },    // reference: ports
   crash: [], addCrash(list){ this.crash.push(...list); },  // crash course sections
   obj: {}, addObjectives(m){ Object.assign(this.obj, m); },  // meta: question id -> SY0-701 objective ("2.4")
-  why: {}, addWhy(m){ Object.assign(this.why, m); },          // meta: MC id -> why each wrong option is wrong
+  why: {}, addWhy(m){ Object.assign(this.why, m); },
+  learn: {}, addLearn(list){ for (const x of list) this.learn[x.id] = x; },   // Learn pages, one per objective          // meta: MC id -> why each wrong option is wrong
   apply(){ for (const q of [...this.bank, ...this.mc]) { if (this.obj[q.id] && !q.obj) q.obj = this.obj[q.id]; if (this.why[q.id] && !q.w) q.w = this.why[q.id]; } }
 };
 // SY0-701 exam objectives
@@ -778,6 +812,12 @@ window.OBJECTIVES = OBJECTIVES;
 <script src="meta/why-hard.js"></script>
 <script>PBQ.apply();</script>
 <script src="app/diagram.js"></script>
+<!-- Learn pages (one per objective) -->
+<script src="learn/domain1-2.js"></script>
+<script src="learn/domain3.js"></script>
+<script src="learn/domain4.js"></script>
+<script src="learn/domain5.js"></script>
+<script src="app/learn-ui.js"></script>
 <!-- User-created questions: loaded from the cache that app/cloud.js keeps in sync with Supabase.
      User text is always escaped (scenario is converted to plain paragraphs, never raw HTML). -->
 <script>
@@ -803,7 +843,7 @@ window.OBJECTIVES = OBJECTIVES;
 <body>
 <header>
   <h1><span class="brand-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><span>Security+</span> <span class="brand-sub">PBQ Practice Lab</span></h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="account">Progress</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="learn">Learn</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="account">Progress</button></span>
   <span class="score" id="score"></span>
   <span class="acct" id="acct"></span>
 </header>
@@ -950,7 +990,7 @@ function render(){
    <h2>${esc(q.title)}</h2>
    <div class="scenario">${q.scenario}${q.log?`<pre class="log">${esc(q.log)}</pre>`:""}</div>${TERM.html(q)}
    <p class="task">${esc(q.task)}</p>
-   <div id="work">${body}<div class="explain"><b>Key takeaway:</b> ${esc(q.explain)}</div></div>
+   <div id="work">${body}<div class="explain"><b>Key takeaway:</b> ${esc(q.explain)}${q.obj?`<div style="margin-top:8px">${LEARN.link(q.obj)}</div>`:""}</div></div>
    <div class="actions sticky">
      <span class="answered" id="pbqans"></span>
      <button class="btn primary" data-act="check">Check answers</button>
@@ -1042,7 +1082,7 @@ function openStudySheet(){
   const admin = window.CLOUD && CLOUD.isAdmin && CLOUD.isAdmin();
   const item=(t,label,sub)=>`<button role="menuitem" data-tab="${t}" class="${TAB===t?"on":""}"><b>${label}</b><span>${sub}</span></button>`;
   const el=document.createElement("div"); el.id="bsheet"; el.className="bsheet-bg";
-  el.innerHTML=`<div class="bsheet" role="menu" aria-label="Study">${item("crash","Crash course","High-yield summaries and exam strategy")}${item("ref","Acronyms & ports","Reference, flashcards and acronym quiz")}${item("mine","My questions","Write and share your own questions")}${admin?item("admin","Admin console","Review queue, users and roles"):""}</div>`;
+  el.innerHTML=`<div class="bsheet" role="menu" aria-label="Study">${item("learn","Learn","One page per exam objective, with your weak spots")}${item("crash","Crash course","High-yield summaries and exam strategy")}${item("ref","Acronyms & ports","Reference, flashcards and acronym quiz")}${item("mine","My questions","Write and share your own questions")}${admin?item("admin","Admin console","Review queue, users and roles"):""}</div>`;
   document.body.appendChild(el); document.querySelector("[data-bmore]").setAttribute("aria-expanded","true");
   const f=el.querySelector("button"); if(f) f.focus();
 }
@@ -1054,7 +1094,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#bsheet")) cl
 function setTab(t){
   TAB=t; clearInterval(timerId); document.body.dataset.page=t;
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
-  document.querySelectorAll(".bn").forEach(b=>b.classList.toggle("on", b.dataset.tab===t || (b.hasAttribute("data-bmore") && ["ref","crash","mine","admin"].includes(t))));
+  document.querySelectorAll(".bn").forEach(b=>b.classList.toggle("on", b.dataset.tab===t || (b.hasAttribute("data-bmore") && ["learn","ref","crash","mine","admin"].includes(t))));
   closeStudySheet();
   document.querySelector(".wrap").classList.toggle("single",t!=="pbq"&&t!=="crash");
   window.TAB_NOW=t;
@@ -1062,6 +1102,7 @@ function setTab(t){
   else if(t==="exam"){ try{history.replaceState(null,"","#exam")}catch(e){} EX.home(); }
   else if(t==="ref"){ try{history.replaceState(null,"","#ref")}catch(e){} REF.home(); }
   else if(t==="crash"){ CC.home(); }
+  else if(t==="learn"){ LEARN.home(); }
   else if(t==="mine"){ try{history.replaceState(null,"","#mine")}catch(e){} MINE.home(); }
   else if(t==="account"){ try{history.replaceState(null,"","#progress")}catch(e){} ACCOUNT.home(); }
   else if(t==="admin"){ try{history.replaceState(null,"","#admin")}catch(e){} ADMIN.home(); }
@@ -1154,7 +1195,7 @@ const MC = (() => {
     const letter = k => String.fromCharCode(65+it.order.indexOf(k));
     const fb = reveal ? `<div class="feedback ${right?"pass":"fail"}" role="status"><p class="verdict">${right?"✓ Correct":`✕ Not quite — the answer ${multi?"is":"is"} ${cs.map(letter).join(" + ")}`}</p>
       <div class="fb-body"><div class="overline">Explanation</div><p><b>${multi?"Answers":"Answer"}:</b> ${cs.map(k=>`${letter(k)}. ${esc(q.o[k])}`).join(" · ")}</p><p>${esc(q.e)}</p>${whyOthers(q,it,cs,right)}
-      <div class="fb-foot"><button class="linkbtn" data-ccreview="${q.domain}">Review ${esc(DOMAINS[q.domain].replace(/^\d\.0 /,""))} in the Crash course →</button></div></div></div>` : "";
+      <div class="fb-foot">${LEARN.link(q.obj)}<button class="linkbtn" data-ccreview="${q.domain}">Review ${esc(DOMAINS[q.domain].replace(/^\d\.0 /,""))} in the Crash course →</button></div></div></div>` : "";
     let btns;
     if(S.mode==="study") btns = it.done
       ? `<button class="btn primary" data-mc="next">${S.i===S.items.length-1?"See results":"Next question →"}</button>`
@@ -1413,13 +1454,13 @@ const EX = (() => {
     const review=X.items.map((it,k)=>{
       const q=it.q, gr=g[k];
       if(it.kind==="mc"){ const cs=MC.correctSet(q); return `<div class="review" data-ok="${gr.ok?1:0}"><div class="muted">Q${k+1} · ${esc(DOMAINS[q.domain])}</div><b>${esc(q.q)}</b>
-        <div class="yours" style="color:${gr.ok?"var(--ok)":"var(--bad)"}">${gr.ok?"✓":"✗"} Your answer: ${it.sel.length?it.sel.map(x=>esc(q.o[x])).join(" + "):"(blank)"}</div>${gr.ok?"":`<div class="yours" style="color:var(--ok)">Correct: ${cs.map(x=>esc(q.o[x])).join(" + ")}</div>`}<p class="muted" style="margin:6px 0 0">${esc(q.e)}</p></div>`; }
+        <div class="yours" style="color:${gr.ok?"var(--ok)":"var(--bad)"}">${gr.ok?"✓":"✗"} Your answer: ${it.sel.length?it.sel.map(x=>esc(q.o[x])).join(" + "):"(blank)"}</div>${gr.ok?"":`<div class="yours" style="color:var(--ok)">Correct: ${cs.map(x=>esc(q.o[x])).join(" + ")}</div>`}<p class="muted" style="margin:6px 0 0">${esc(q.e)}</p>${gr.ok?"":LEARN.link(q.obj)}</div>`; }
       let det="";
       if(it.t==="build"||it.t==="topo") det=DIAG.items(q).map(x=>{ const v=it.vals[x.k]||"", ok=v===x.a; return `<div class="yours" style="color:${ok?"var(--ok)":"var(--bad)"}">${ok?"✓":"✗"} ${esc(x.label)} — you: ${esc(v||"(blank)")}${ok?"":` · correct: <b>${esc(x.a)}</b> <span class="muted">${esc(x.w||"")}</span>`}</div>`; }).join("");
       if(it.t==="grid"||((it.t==="build"||it.t==="topo")&&q.rows)) det+=q.rows.map((r,ri)=>{const yours=r.a.map((a,ci)=>it.vals[ri+"_"+ci]||"(blank)"); const ok=r.a.every((a,ci)=>{const v=it.vals[ri+"_"+ci]||""; return typeof a==="number"? Math.abs(parseFloat(String(v).replace(/[$,%\s]/g,""))-a)<=0.001*Math.max(1,Math.abs(a)) : v===a;}); return `<div class="yours" style="color:${ok?"var(--ok)":"var(--bad)"}">${ok?"✓":"✗"} ${esc(r.l)} — you: ${esc(yours.join(" / "))}${ok?"":` · correct: <b>${esc(r.a.join(" / "))}</b> <span class="muted">${esc(r.w)}</span>`}</div>`}).join("");
       else if(it.t==="order") det=`<div class="yours">Correct order: ${q.items.map((s,i)=>`${i+1}. ${esc(s)}`).join(" → ")}</div>`;
       else if(it.t==="multi") det=q.choices.map((c,i)=>{const on=it.checked.includes(i), ok=on===!!c.c; return `<div class="yours" style="color:${ok?"var(--ok)":"var(--bad)"}">${ok?"✓":"✗"} ${on?"[selected] ":""}${esc(c.t)} ${c.c?"(correct)":"(distractor)"}</div>`}).join("");
-      return `<div class="review" data-ok="${gr.ok?1:0}"><div class="muted">Q${k+1} · PBQ · ${esc(DOMAINS[q.domain])} · ${Math.round(gr.frac*100)}% credit</div><b>${esc(q.title)}</b>${det}<p class="muted" style="margin:6px 0 0"><b>Key takeaway:</b> ${esc(q.explain)}</p></div>`;
+      return `<div class="review" data-ok="${gr.ok?1:0}"><div class="muted">Q${k+1} · PBQ · ${esc(DOMAINS[q.domain])} · ${Math.round(gr.frac*100)}% credit</div><b>${esc(q.title)}</b>${det}<p class="muted" style="margin:6px 0 0"><b>Key takeaway:</b> ${esc(q.explain)}</p>${gr.ok?"":LEARN.link(q.obj)}</div>`;
     }).join("");
     $("#main").innerHTML = `
       <h2>Exam results</h2>
@@ -1747,11 +1788,14 @@ const CC = (() => {
   return { home, go };
 })();
 function cur_set(i){ cur=i; }
+// Typed or pasted #learn-… links in an already-open tab
+window.addEventListener("hashchange",()=>{ const h=(location.hash||"").slice(1); if(h==="learn"||h.startsWith("learn-")){ const k=h.slice(6); if(k) LEARN.open(k); else setTab("learn"); } });
 document.addEventListener("click", e=>{ const r=e.target.closest("[data-ccreview]"); if(r){ const id="d"+r.dataset.ccreview; setTab("crash"); if(PBQ.crash.some(s=>s.id===id)) CC.go(id); } });
 
 // Initial route
 (() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
   if(h==="mine"||h==="admin"||h==="account"||h==="progress"){ window.__pendingTab=h==="progress"?"account":h; return setTab("pbq"); }   // opened by app/*-ui.js once they load
+  if(h==="learn"||h.startsWith("learn-")){ setTab("learn"); const k=h.slice(6); if(k) LEARN.open(k); return; }
   if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
 <!-- Cloud sync, question builder/admin, account dashboard -->

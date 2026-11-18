@@ -158,6 +158,24 @@ for (const [id, w] of Object.entries(whyMap)) {
 }
 console.log(`Meta: ${Object.keys(objMap).length} objective tags, ${Object.keys(whyMap).length} questions with per-option explanations`);
 
+// ---- Learn pages: one per objective ----
+const learnDir = path.join(__dirname, "..", "web", "learn"), learn = {};
+if (fs.existsSync(learnDir)) for (const f of fs.readdirSync(learnDir).filter(f => f.endsWith(".js")).sort()) {
+  if (!index.includes(`learn/${f}`)) errors.push(`[${f}] not referenced by a <script src> tag in index.html`);
+  try { vm.runInNewContext(fs.readFileSync(path.join(learnDir, f), "utf8"), { PBQ: { addLearn: list => list.forEach(x => { if (learn[x.id]) errors.push(`[learn ${x.id}] defined twice`); learn[x.id] = x; }) } }, { filename: f }); }
+  catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
+}
+for (const k of OBJ) {
+  const x = learn[k];
+  if (!x) { errors.push(`[learn] no page for objective ${k}`); continue; }
+  if (!x.summary) errors.push(`[learn ${k}] missing summary`);
+  if (!Array.isArray(x.concepts) || x.concepts.length < 4 || x.concepts.some(c => !Array.isArray(c) || c.length !== 2 || !c[0] || !c[1])) errors.push(`[learn ${k}] needs 4+ concepts as [term, meaning]`);
+  if (!Array.isArray(x.traps) || x.traps.length < 2) errors.push(`[learn ${k}] needs 2+ traps`);
+  if (!Array.isArray(x.tips) || !x.tips.length) errors.push(`[learn ${k}] needs at least one tip`);
+}
+for (const k of Object.keys(learn)) if (!OBJ.includes(k)) errors.push(`[learn] "${k}" isn't an SY0-701 objective`);
+console.log(`Learn: ${Object.keys(learn).length} objective pages`);
+
 const mcDom = [1, 2, 3, 4, 5].map(d => `D${d}: ${mc.filter(q => q.domain === d).length}`).join("  ");
 const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (q.level||"medium") === l).length}`).join(", ");
 console.log(`Levels — PBQ ${lv(bank)} | MC ${lv(mc)}`);

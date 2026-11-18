@@ -2,6 +2,9 @@
 [build]
   publish = "web"
   command = "node tools/write-config.js && node tools/validate.js"
+  # Save build credits: skip the deploy when nothing that ships changed (e.g. only tests, docs or migrations).
+  # Exit code 0 = skip, 1 = build. If the previous commit isn't available, Netlify builds anyway.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- web/ tools/ netlify.toml"
 
 [build.environment]
   NODE_VERSION = "20"

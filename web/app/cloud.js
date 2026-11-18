@@ -9,7 +9,7 @@ window.CLOUD = (() => {
   const META = P + "__meta", LOGQ = P + "__logq", CQ = P + "__custom";
   // Keys synced to the cloud (everything a user would expect to follow them between devices)
   const KEYS = ["pbq-status","pbq-level","mcq-stats","mcq-prefs","exam-history","exam-len","exam-level",
-                "ref-known","ref-prefs","cc-done","cc-cur","exam-date","daily-log","daily-goal"];
+                "ref-known","ref-prefs","cc-done","cc-cur","exam-date","daily-log","daily-goal","learn-done"];
   const $ = s => document.querySelector(s);
   const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const jget = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
@@ -164,7 +164,7 @@ window.CLOUD = (() => {
   };
   // Admin lives in the account menu now (not the tab bar); if someone loses admin while on that page, send them to Progress.
   function renderTabs() {
-    if (window.TAB === "admin" && !isAdmin() && window.setTab) setTab("account");
+    if (window.TAB_NOW === "admin" && !isAdmin() && window.setTab) setTab("account");
     renderAcct();
   }
   function loadLib() {

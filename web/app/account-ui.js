@@ -76,11 +76,12 @@
           <div class="scale-l"><span>100</span><span style="margin-left:auto;margin-right:${100 - pos(PASS) - 3}%">750 pass</span><span>900</span></div>
           <div class="mrow" style="margin-top:0"><span class="chip ${r.v >= PASS ? "vis-public" : "vis-pending"}">${r.v >= PASS ? "Above passing" : `${PASS - r.v} points to pass`}</span><span class="chip">${h(r.label)}</span></div>
           <p class="muted" style="margin:10px 0 0">${h(r.basis)}${r.basis ? ". " : ""}${h(r.note)}</p></div>`;
+    const weakObjK = m.weakest ? (Object.entries(m.objStat).filter(([k, o]) => +k[0] === m.weakest && o.s >= 3).sort((a, b) => a[1].c / a[1].s - b[1].c / b[1].s)[0] || [])[0] : null;
     const focusCard = m.weakest
       ? `<div class="card focus"><div class="overline">Focus next</div>
           <div class="fname">${h(dName(m.weakest))}</div>
           <p class="muted" style="margin:0 0 16px">Your weakest domain · ${WEIGHT[m.weakest]}% of the exam · ${pct(m.examDom[m.weakest] != null ? m.examDom[m.weakest] : m.domAcc[m.weakest])} correct${(() => { const OBk = window.OBJECTIVES || {}; const w = Object.entries(m.objStat).filter(([k, o]) => +k[0] === m.weakest && o.s >= 3).sort((a, b) => a[1].c / a[1].s - b[1].c / b[1].s)[0]; return w ? `<br>Weakest objective here: <b>${w[0]} ${h(OBk[w[0]] || "")}</b> (${pct(w[1].c / w[1].s)})` : ""; })()}</p>
-          <div class="mrow"><button class="btn primary" data-accgo="drill:${m.weakest}">Drill this domain</button><button class="btn" data-accgo="exam">Practice exam</button></div></div>`
+          <div class="mrow"><button class="btn primary" data-accgo="drill:${m.weakest}">Drill this domain</button>${weakObjK ? `<button class="btn" data-learn="${weakObjK}">📖 Read ${weakObjK}</button>` : `<button class="btn" data-learn="${m.weakest}.1">📖 Learn this domain</button>`}</div></div>`
       : `<div class="card focus"><div class="overline">Focus next</div>
           <div class="fname">Find your weak spots</div>
           <p class="muted" style="margin:0 0 16px">After about 5 answers per domain (or one practice exam), this card points you at the domain that needs the most work.</p>
@@ -99,7 +100,7 @@
     const weakObj = objRows.filter(o => o.s >= 3).sort((a, b) => a.a - b.a).slice(0, 5);
     const objRow = o => `<tr><td data-h="Objective"><div class="dname"><span class="did">${o.k}</span>${h(o.name)}</div><div class="dw">${o.n} questions in the bank · ${o.s} answers</div></td>
       <td data-h="Accuracy"><div class="dbar">${bar(o.a)}<span class="stat">${o.a == null ? "No answers" : pct(o.a)}</span></div></td>
-      <td><button class="btn sm ghost" data-accgo="drillobj:${o.k}">Drill →</button></td></tr>`;
+      <td><div class="qact"><button class="btn sm ghost" data-learn="${o.k}">📖 Read</button><button class="btn sm ghost" data-accgo="drillobj:${o.k}">Drill →</button></div></td></tr>`;
     const objCard = `<div class="card"><h3>By exam objective</h3>
       ${weakObj.length ? `<p class="muted" style="margin:-6px 0 12px">Your 5 weakest objectives (at least 3 answers each). Drill one to practice only those questions.</p><table class="qlist domtbl"><thead><tr><th>Objective</th><th>Multiple-choice accuracy</th><th></th></tr></thead><tbody>${weakObj.map(objRow).join("")}</tbody></table>`
         : `<p class="muted" style="margin:-6px 0 12px">Answer at least 3 questions in an objective to see where you're weakest.</p>`}
