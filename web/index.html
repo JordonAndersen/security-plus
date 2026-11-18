@@ -678,6 +678,48 @@ mark{background:var(--warn-bg);color:var(--warn-ink);border-radius:3px}
 .dp-foot{margin:10px 0 0;font-size:13px}
 .dscroll-hint{display:none;margin:0 0 6px;font-size:13px}
 @media (max-width:820px){.diag{min-width:680px}.dscroll-hint{display:block}}
+/* --- phone layout: bottom navigation + compact controls --- */
+.bnav{display:none}
+.bsheet-bg{position:fixed;inset:0;z-index:39;background:rgba(10,14,20,.35)}
+.bsheet{position:absolute;left:8px;right:8px;bottom:calc(var(--bnav,64px) + env(safe-area-inset-bottom) + 8px);padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-md);animation:reveal .15s ease-out both}
+.bsheet button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:12px 14px;border:0;background:none;border-radius:var(--r-md);text-align:left;color:var(--ink);font:inherit;cursor:pointer}
+.bsheet button:hover,.bsheet button:focus-visible{background:var(--chip);outline:0}
+.bsheet button.on{background:var(--accent-soft)}
+.bsheet button b{font-size:15px;font-weight:600}.bsheet button span{font-size:13px;color:var(--muted)}
+.row label{display:block}
+.row label > input[type=radio],.row label > input[type=checkbox]{margin:0 6px 0 0;vertical-align:-2px}
+@media (max-width:700px){
+  :root{--bnav:62px;--hdr:57px}
+  header .tabs{display:none}
+  header h1{height:56px}
+  body{padding-bottom:calc(var(--bnav) + env(safe-area-inset-bottom))}
+  .bnav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--bnav) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+  .auth-mode .bnav{display:none}
+  .bn{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;border:0;background:none;color:var(--muted);font:500 11px/1 var(--font);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color var(--t-fast)}
+  .bn svg{width:23px;height:23px}
+  .bn.on{color:var(--accent)}
+  .bn.on::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+  .bn:active{transform:scale(.96)}
+  .toast{bottom:calc(var(--bnav) + env(safe-area-inset-bottom) + 12px)}
+  .actions.sticky{bottom:calc(var(--bnav) + env(safe-area-inset-bottom));row-gap:6px}
+  .actions.sticky .answered{order:-1;width:100%}
+  .actions.sticky .btn{flex:1 1 auto;height:38px;padding:0 8px;font-size:12.5px}
+  main{padding:16px 16px 32px}
+  .dom{flex-wrap:wrap;row-gap:6px}
+  .dom .nm{flex:1 1 55%;min-width:0}
+  .dom .bar{order:3;flex:1 1 100%;width:auto}
+  .dom .stat{min-width:0}
+  .card h3{font-size:17px}
+  .actions{gap:8px}
+  .actions .btn{height:42px;padding:0 14px;font-size:14px}
+  .exbar{gap:10px 14px;padding:10px 12px}
+  .exbar .xprog .pbar{width:110px}
+  .tip .keys{display:none}
+  main .tabs{display:flex !important;flex-wrap:wrap;width:100%}main .tabs .tab{flex:1 1 auto;padding:0 10px}
+  .acc-head{align-items:flex-start}
+  .revq-i{flex-wrap:wrap}
+  .modal-bg{padding:24px 12px}
+}
 </style>
 <script>
 // Question registry. Each file in /questions calls PBQ.add([...]).
@@ -765,6 +807,13 @@ window.OBJECTIVES = OBJECTIVES;
   <span class="score" id="score"></span>
   <span class="acct" id="acct"></span>
 </header>
+<div class="bnav" role="navigation" aria-label="Main">
+  <button class="bn" data-tab="pbq"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3h8V3M8.5 12.5l2 2 4.5-4.5M8 18h8"/></svg><span>Practice</span></button>
+  <button class="bn" data-tab="mcq"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="7" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="6" cy="17" r="1.6"/><path d="M10 7h10M10 12h10M10 17h10"/></svg><span>Questions</span></button>
+  <button class="bn" data-tab="exam"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg><span>Exam</span></button>
+  <button class="bn" data-bmore aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z"/><path d="M4 20a2 2 0 0 0 2 1h13v-3M8 7h7M8 11h5"/></svg><span>Study</span></button>
+  <button class="bn" data-tab="account"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Progress</span></button>
+</div>
 <div class="wrap">
   <nav id="nav"></nav>
   <main id="main"></main>
@@ -986,9 +1035,27 @@ document.addEventListener("change",e=>{
 });
 
 let TAB="pbq";
+// Phone navigation: the "Study" button opens a sheet with the remaining sections
+function closeStudySheet(){ const s=$("#bsheet"); if(s) s.remove(); const b=document.querySelector("[data-bmore]"); if(b) b.setAttribute("aria-expanded","false"); }
+function openStudySheet(){
+  if($("#bsheet")) return closeStudySheet();
+  const admin = window.CLOUD && CLOUD.isAdmin && CLOUD.isAdmin();
+  const item=(t,label,sub)=>`<button role="menuitem" data-tab="${t}" class="${TAB===t?"on":""}"><b>${label}</b><span>${sub}</span></button>`;
+  const el=document.createElement("div"); el.id="bsheet"; el.className="bsheet-bg";
+  el.innerHTML=`<div class="bsheet" role="menu" aria-label="Study">${item("crash","Crash course","High-yield summaries and exam strategy")}${item("ref","Acronyms & ports","Reference, flashcards and acronym quiz")}${item("mine","My questions","Write and share your own questions")}${admin?item("admin","Admin console","Review queue, users and roles"):""}</div>`;
+  document.body.appendChild(el); document.querySelector("[data-bmore]").setAttribute("aria-expanded","true");
+  const f=el.querySelector("button"); if(f) f.focus();
+}
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-bmore]")) return openStudySheet();
+  const s=$("#bsheet"); if(s && (e.target===s)) closeStudySheet();
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#bsheet")) closeStudySheet(); });
 function setTab(t){
   TAB=t; clearInterval(timerId); document.body.dataset.page=t;
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
+  document.querySelectorAll(".bn").forEach(b=>b.classList.toggle("on", b.dataset.tab===t || (b.hasAttribute("data-bmore") && ["ref","crash","mine","admin"].includes(t))));
+  closeStudySheet();
   document.querySelector(".wrap").classList.toggle("single",t!=="pbq"&&t!=="crash");
   window.TAB_NOW=t;
   if(t==="mcq"){ try{history.replaceState(null,"","#mcq")}catch(e){} MC.home(); }
