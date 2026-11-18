@@ -753,6 +753,8 @@ mark{background:var(--warn-bg);color:var(--warn-ink);border-radius:3px}
 .learn-link{margin-right:16px}
 .fb-foot{display:flex;flex-wrap:wrap;gap:6px 16px}
 @media (max-width:700px){.ldl > div{grid-template-columns:1fr;gap:2px}.lsum{font-size:16px}}
+/* Hide an element injected from outside the app (not part of this codebase) */
+.nl-wrap{display:none!important}
 </style>
 <script>
 // Question registry. Each file in /questions calls PBQ.add([...]).
