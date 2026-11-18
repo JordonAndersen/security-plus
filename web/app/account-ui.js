@@ -9,6 +9,8 @@
   const cls = x => x == null ? "" : x >= 0.8 ? "" : x >= 0.65 ? "mid" : "low";
   const when = t => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
   const fmtTime = s => `${Math.floor(s / 60)}m`;
+  const WEIGHT = { 1: 12, 2: 22, 3: 18, 4: 28, 5: 20 };   // SY0-701 domain weights (% of exam)
+  const dName = d => DOMAINS[d].replace(/^\d\.0 /, "");
   let actCache = null;
 
   function metrics() {
@@ -56,22 +58,45 @@
     const cloud = C(), user = cloud && cloud.user(), prof = cloud && cloud.profile(), m = metrics(), r = readiness(m);
     const dl = cloud ? cloud.daysLeft() : null, date = (store.get("exam-date", "") || "").slice(0, 10);
     const name = user ? ((prof && prof.display_name) || user.email.split("@")[0]) : (cloud && cloud.isGuest() ? "Guest" : "Your progress");
-    $("#score").textContent = "Account";
-    const countdown = dl == null ? `<div class="cd-num">—</div><div class="muted">Set your exam date below</div>`
-      : `<div class="cd-num">${dl > 0 ? dl : dl === 0 ? "Today" : "Done"}</div><div class="muted">${dl > 0 ? (dl === 1 ? "day" : "days") + " until " : dl === 0 ? "Exam day — good luck · " : "Exam date was "}${h(new Date(date + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "long", day: "numeric" }))}</div>`;
-    const domRows = [1,2,3,4,5].map(d => `<tr><td>${h(DOMAINS[d])}${d === m.weakest ? ' <span class="chip lvl-hard">Weakest</span>' : ""}</td>
-      <td>${bar(m.domAcc[d])} <span class="muted">${pct(m.domAcc[d])}</span></td><td>${bar(m.examDom[d])} <span class="muted">${pct(m.examDom[d])}</span></td>
-      <td><button class="btn sm" data-accgo="drill:${d}">Drill</button></td></tr>`).join("");
+    $("#score").textContent = "";
+    const dateLabel = date ? new Date(date + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "";
+    const datePill = !date ? `<button class="btn" data-accgo="date">📅 Set exam date</button>`
+      : `<button class="btn" data-accgo="date" title="Change exam date">📅 Exam ${h(dateLabel)} · <b>${dl > 0 ? `${dl} day${dl === 1 ? "" : "s"}` : dl === 0 ? "today" : "done"}</b></button>`;
+    // readiness card: big score + 100–900 scale with the 750 pass line
+    const pos = v => Math.max(0, Math.min(100, (v - 100) / 8));
+    const readyCard = r.v == null
+      ? `<div class="card ready"><div class="overline">Estimated readiness</div>
+          <p style="margin:12px 0 4px;font-size:16px">No estimate yet.</p><p class="muted" style="margin:0 0 16px">Answer 20 multiple-choice questions or take a practice exam to see your estimate.</p>
+          <div class="mrow"><button class="btn primary" data-accgo="exam">Take a practice exam</button><button class="btn" data-accgo="mcq">Practice questions</button></div></div>`
+      : `<div class="card ready"><div class="overline">Estimated readiness</div>
+          <div class="ready-v">${r.v}<span class="of"> / 900</span></div>
+          <div class="scale" role="img" aria-label="Score ${r.v} on a 100 to 900 scale; passing is 750"><b class="tone-${r.tone}" style="width:${pos(r.v)}%"></b><span class="pass" style="left:${pos(PASS)}%"></span></div>
+          <div class="scale-l"><span>100</span><span style="margin-left:auto;margin-right:${100 - pos(PASS) - 3}%">750 pass</span><span>900</span></div>
+          <div class="mrow" style="margin-top:0"><span class="chip ${r.v >= PASS ? "vis-public" : "vis-pending"}">${r.v >= PASS ? "Above passing" : `${PASS - r.v} points to pass`}</span><span class="chip">${h(r.label)}</span></div>
+          <p class="muted" style="margin:10px 0 0">${h(r.basis)}${r.basis ? ". " : ""}${h(r.note)}</p></div>`;
+    const focusCard = m.weakest
+      ? `<div class="card focus"><div class="overline">Focus next</div>
+          <div class="fname">${h(dName(m.weakest))}</div>
+          <p class="muted" style="margin:0 0 16px">Your weakest domain · ${WEIGHT[m.weakest]}% of the exam · ${pct(m.examDom[m.weakest] != null ? m.examDom[m.weakest] : m.domAcc[m.weakest])} correct</p>
+          <div class="mrow"><button class="btn primary" data-accgo="drill:${m.weakest}">Drill this domain</button><button class="btn" data-accgo="exam">Practice exam</button></div></div>`
+      : `<div class="card focus"><div class="overline">Focus next</div>
+          <div class="fname">Find your weak spots</div>
+          <p class="muted" style="margin:0 0 16px">After about 5 answers per domain (or one practice exam), this card points you at the domain that needs the most work.</p>
+          <div class="mrow"><button class="btn primary" data-accgo="mcq">Start practicing</button></div></div>`;
+    const domRows = [1,2,3,4,5].map(d => `<tr><td data-h="Domain"><div class="dname"><span class="did">${d}.0</span>${h(dName(d))}${d === m.weakest ? ' <span class="chip lvl-hard">Weakest</span>' : ""}</div><div class="dw">${WEIGHT[d]}% of exam</div></td>
+      <td data-h="Multiple choice (all time)"><div class="dbar">${bar(m.domAcc[d])}<span class="stat">${m.domAcc[d] == null ? "No answers" : pct(m.domAcc[d])}</span></div></td>
+      <td data-h="Last 3 practice exams"><div class="dbar">${bar(m.examDom[d])}<span class="stat">${m.examDom[d] == null ? "No exams" : pct(m.examDom[d])}</span></div></td>
+      <td><button class="btn sm ghost" data-accgo="drill:${d}">Drill →</button></td></tr>`).join("");
     const exams = m.last3.length ? `<table class="qlist"><thead><tr><th>Date</th><th>Exam</th><th>Score</th><th>Result</th><th>Time</th><th>Domains</th></tr></thead><tbody>${m.last3.map(x => `<tr>
-        <td>${h(when(x.d))}</td><td>${x.len === "half" ? "Half" : "Full"}${x.lvl === "hard" ? ' <span class="chip lvl-hard">Hard</span>' : ""}</td>
-        <td><b>${h(String(x.score))}</b> <span class="muted">${pct(x.pct)}</span></td>
-        <td>${x.score >= PASS ? '<span class="chip vis-public">Pass</span>' : '<span class="chip vis-rejected">Below 750</span>'}</td><td>${fmtTime(x.secs || 0)}</td>
+        <td data-h="Date">${h(when(x.d))}</td><td data-h="Exam">${x.len === "half" ? "Half" : "Full"}${x.lvl === "hard" ? ' <span class="chip lvl-hard">Hard</span>' : ""}</td>
+        <td data-h="Score"><b style="font-family:var(--mono)">${h(String(x.score))}</b> <span class="muted">${pct(x.pct)}</span></td>
+        <td data-h="Result">${x.score >= PASS ? '<span class="chip vis-public">Pass</span>' : '<span class="chip vis-rejected">Below 750</span>'}</td><td data-h="Time">${fmtTime(x.secs || 0)}</td>
         <td class="mini">${[1,2,3,4,5].map(d => x.dom && x.dom[d] != null ? `<span title="${h(DOMAINS[d])}: ${pct(x.dom[d])}" class="mini-b ${cls(x.dom[d])}" style="height:${Math.max(8, Math.round(x.dom[d] * 34))}px"></span>` : `<span class="mini-b none"></span>`).join("")}</td></tr>`).join("")}</tbody></table>`
-      : `<p class="muted">No practice exams yet.</p>`;
+      : `<div class="empty"><p class="muted">No practice exams yet. A full exam is the best read on whether you're ready.</p><button class="btn" data-accgo="exam">Take a practice exam</button></div>`;
 
     // settings vary by mode
     const configured = cloud && cloud.configured();
-    const ioRow = `<div class="mrow"><button class="btn" data-accgo="export">Export progress</button><label class="btn" style="display:inline-block">Import progress<input type="file" accept="application/json" id="acc-import" hidden></label></div>`;
+    const ioRow = `<div class="mrow"><button class="btn" data-accgo="export">Export progress</button><label class="btn">Import progress<input type="file" accept="application/json" id="acc-import" hidden></label></div>`;
     const settings = user ? `
       <div class="card"><h3>Profile</h3>
         <div class="row"><label class="f2">Display name<input type="text" id="acc-name" maxlength="60" value="${h((prof && prof.display_name) || "")}"></label>
@@ -90,24 +115,17 @@
         ${configured ? `<div class="mrow"><button class="btn primary" data-acct="signup-page">Create an account to sync across devices</button><button class="btn" data-acct="open">Sign in</button></div>` : ""}</div>`;
 
     $("#main").innerHTML = `
-      <h2>${h(name)}</h2>
-      <div class="acc-top">
-        <div class="card cd">${countdown}</div>
-        <div class="card ready tone-${r.tone}"><div class="muted">Readiness</div>
-          <div class="ready-v">${r.v == null ? "—" : r.v}<span class="muted" style="font-size:14px"> / 900</span> <span class="chip ${r.tone === "ok" ? "vis-public" : r.tone === "mid" ? "vis-pending" : r.tone === "bad" ? "vis-rejected" : ""}">${h(r.label)}</span></div>
-          <div class="muted">${h(r.basis)}${r.basis ? ". " : ""}${h(r.note)}</div>
-          ${m.weakest ? `<div class="mrow"><button class="btn sm primary" data-accgo="drill:${m.weakest}">Drill weakest: ${h(DOMAINS[m.weakest].replace(/^\d\.0 /, ""))}</button><button class="btn sm" data-accgo="exam">Take a practice exam</button></div>` : `<div class="mrow"><button class="btn sm primary" data-accgo="exam">Take a practice exam</button></div>`}
-        </div>
-      </div>
+      <div class="acc-head"><div>${user ? '<div class="hello">Welcome back,</div>' : '<div class="hello">Your progress</div>'}<h2>${h(user ? name : (cloud && cloud.isGuest() ? "Guest" : "Progress"))}</h2></div>${datePill}</div>
+      <div class="acc-top">${readyCard}${focusCard}</div>
       <div class="tiles">
         ${tile("Questions answered", m.answered, `${m.seen} of ${m.bankSize} seen`)}
-        ${tile("Multiple-choice accuracy", pct(m.acc), m.hardAcc != null ? `Hard questions: ${pct(m.hardAcc)}` : "")}
+        ${tile("Multiple-choice accuracy", m.acc == null ? '<span class="muted" style="font-size:15px">Not started</span>' : pct(m.acc), m.hardAcc != null ? `Hard questions: ${pct(m.hardAcc)}` : "")}
         ${tile("PBQs passed", `${m.pbqPassed}<span class="muted" style="font-size:15px"> / ${m.pbqTotal}</span>`, `${m.pbqTried} attempted`)}
         ${tile("Acronyms mastered", `${m.acrMastered}<span class="muted" style="font-size:15px"> / ${m.acrTotal}</span>`, "")}
-        ${tile("Practice exams", m.hist.length, m.best ? `Best: ${m.best}` : "")}
+        ${tile("Practice exams", m.hist.length, m.best ? `Best: ${m.best}` : "None yet")}
       </div>
       <div class="card"><h3>Last 3 practice exams</h3>${exams}${m.hist.length > 3 ? `<p class="muted">${m.hist.length} total — full history on the Practice exam tab.</p>` : ""}</div>
-      <div class="card"><h3>By domain</h3><table class="qlist domtbl"><thead><tr><th>Domain</th><th>Multiple choice (all time)</th><th>Last 3 practice exams</th><th></th></tr></thead><tbody>${domRows}</tbody></table></div>
+      <div class="card"><h3>By domain</h3><p class="muted" style="margin:-6px 0 12px">The tick on each bar marks 80% — a comfortable target for exam day.</p><table class="qlist domtbl"><thead><tr><th>Domain</th><th>Multiple choice (all time)</th><th>Last 3 practice exams</th><th></th></tr></thead><tbody>${domRows}</tbody></table></div>
       <div class="card"><h3>Activity — last 14 days</h3><div id="acc-activity">${user ? '<p class="muted">Loading…</p>' : '<p class="muted">Sign in to track daily activity across devices.</p>'}</div></div>
       <h2 style="margin-top:28px">Settings</h2>${settings}<div class="merr" id="acc-msg"></div>`;
     if (user) renderActivity();
@@ -135,6 +153,8 @@
     try {
       if (a === "drill") { MC.preset({ doms: [+arg], levels: ["easy","medium","hard"], pool: "all", mode: "study" }); return setTab("mcq"); }
       if (a === "exam") return setTab("exam");
+      if (a === "mcq") return setTab("mcq");
+      if (a === "date") { const d = $("#acc-date"); if (d) { d.scrollIntoView({ behavior: "smooth", block: "center" }); d.focus({ preventScroll: true }); try { d.showPicker && d.showPicker(); } catch (x) {} } return; }
       if (a === "save") { await cloud.saveProfile(v("acc-name").trim() || null, v("acc-date")); await home(); return msg("Saved.", true); }
       if (a === "sync") { await cloud.syncNow(); await home(); return msg("Up to date.", true); }
       if (a === "pw") { if (v("acc-pw").length < 12) return msg("Use at least 12 characters."); await cloud.changePassword(v("acc-pw")); $("#acc-pw").value = ""; return msg("Password changed.", true); }
