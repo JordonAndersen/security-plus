@@ -9,7 +9,7 @@ window.CLOUD = (() => {
   const META = P + "__meta", LOGQ = P + "__logq", CQ = P + "__custom";
   // Keys synced to the cloud (everything a user would expect to follow them between devices)
   const KEYS = ["pbq-status","pbq-level","mcq-stats","mcq-prefs","exam-history","exam-len","exam-level",
-                "ref-known","ref-prefs","cc-done","cc-cur","exam-date"];
+                "ref-known","ref-prefs","cc-done","cc-cur","exam-date","daily-log","daily-goal"];
   const $ = s => document.querySelector(s);
   const h = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const jget = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
@@ -162,9 +162,10 @@ window.CLOUD = (() => {
     users:     async () => must(await sb.rpc("admin_user_overview")),
     setRole:   async (id, role) => must(await sb.rpc("admin_set_role", { target: id, new_role: role }))
   };
+  // Admin lives in the account menu now (not the tab bar); if someone loses admin while on that page, send them to Progress.
   function renderTabs() {
-    const adm = document.querySelector('[data-tab="admin"]');
-    if (adm) adm.hidden = !isAdmin();
+    if (window.TAB === "admin" && !isAdmin() && window.setTab) setTab("account");
+    renderAcct();
   }
   function loadLib() {
     return new Promise((res, rej) => {
@@ -301,14 +302,49 @@ window.CLOUD = (() => {
   }
   function setStatus(s) { status = s; renderAcct(); document.dispatchEvent(new CustomEvent("cloud:status")); }
   const STATUS = { local: "Saved in this browser", "signed-out": "Not signed in", syncing: "Syncing…", synced: "Synced", error: "Sync error" };
+  function goalRing() {
+    if (!window.DAILY) return "";
+    const n = DAILY.count(), g = DAILY.goal(), f = Math.min(1, n / g), r = 13, c = 2 * Math.PI * r, st = DAILY.streak();
+    const tip = `Daily goal: ${n} of ${g} questions today${st ? ` · ${st}-day streak` : ""}`;
+    return `<button class="goal-ring ${n >= g ? "met" : ""}" data-acct="progress" title="${h(tip)}" aria-label="${h(tip)}">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="gr-track"/><circle cx="16" cy="16" r="${r}" class="gr-fill" stroke-dasharray="${(f * c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 16 16)"/></svg>
+      <span>${n >= g ? "✓" : n}</span></button>`;
+  }
   function renderAcct() {
     const el = $("#acct"); if (!el) return;
     const dl = daysLeft();
     const cd = dl == null ? "" : `<span class="chip countdown ${dl <= 7 ? "lvl-hard" : ""}" title="Exam date">${dl > 0 ? dl + (dl === 1 ? " day" : " days") + " to exam" : dl === 0 ? "Exam day — good luck" : "Exam date passed"}</span>`;
-    const label = user ? h((profile && profile.display_name) || user.email.split("@")[0]) : configured ? "Sign in" : "Account";
+    const signedOut = configured && !user && !isGuest();
+    const label = user ? h((profile && profile.display_name) || user.email.split("@")[0]) : signedOut ? "Sign in" : isGuest() ? "Guest" : "Account";
     const dot = { local: "", "signed-out": "", syncing: "dot-sync", synced: "dot-ok", error: "dot-err" }[status];
-    el.innerHTML = `${cd}<button class="acct-btn" data-acct="open" title="${h(STATUS[status])}">${dot ? `<i class="dot ${dot}"></i>` : ""}${label}</button>`;
+    el.innerHTML = `${cd}${goalRing()}<button class="acct-btn" data-acct="${signedOut ? "open" : "menu"}" title="${h(STATUS[status])}" ${signedOut ? "" : 'aria-haspopup="menu" aria-expanded="false"'}>${dot ? `<i class="dot ${dot}"></i>` : ""}${label}${signedOut ? "" : ' <span class="caret" aria-hidden="true">▾</span>'}</button>`;
   }
+  function closeMenu() { const m = $("#acct-menu"); if (m) m.remove(); const b = $(".acct-btn"); if (b) b.setAttribute("aria-expanded", "false"); }
+  function openMenu(btn) {
+    if ($("#acct-menu")) return closeMenu();
+    const m = document.createElement("div"); m.id = "acct-menu"; m.className = "acct-menu"; m.setAttribute("role", "menu");
+    const who = user ? `<div class="am-who"><b>${h((profile && profile.display_name) || user.email.split("@")[0])}</b><span>${h(user.email)}</span><span class="am-sync">${h(STATUS[status])}${isAdmin() ? " · admin" : ""}</span></div>`
+      : `<div class="am-who"><b>${isGuest() ? "Guest" : "This browser"}</b><span>Progress is saved in this browser only.</span></div>`;
+    const item = (act, text, extra = "") => `<button role="menuitem" data-acct="${act}" ${extra}>${text}</button>`;
+    m.innerHTML = who + `<div class="am-sep"></div>` +
+      item("progress", "Progress") + item("settings", "Settings") +
+      (isAdmin() ? item("admin", "Admin console") : "") +
+      (user ? item("syncnow", "Sync now") : "") +
+      `<div class="am-sep"></div>` +
+      (user ? item("signout", "Sign out") : configured ? item("signin-menu", "Sign in") + item("signup-page", "Create an account") : "");
+    document.body.appendChild(m);
+    const r = btn.getBoundingClientRect();
+    m.style.top = (r.bottom + 6) + "px"; m.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    btn.setAttribute("aria-expanded", "true");
+    const first = m.querySelector("button"); if (first) first.focus();
+  }
+  document.addEventListener("click", e => { if ($("#acct-menu") && !e.target.closest("#acct-menu, .acct-btn")) closeMenu(); });
+  document.addEventListener("keydown", e => {
+    const m = $("#acct-menu"); if (!m) return;
+    if (e.key === "Escape") { closeMenu(); const b = $(".acct-btn"); if (b) b.focus(); }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const bs = [...m.querySelectorAll("button")], i = bs.indexOf(document.activeElement); bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length].focus(); }
+  });
+  window.addEventListener("resize", closeMenu);
 
   // --- Misconfigured deploy warning (e.g. drag-and-drop deploy, or env vars missing) ---
   function deployWarning() {
@@ -395,7 +431,14 @@ window.CLOUD = (() => {
     const a = b.dataset.acct;
     try {
       if (a === "open") { if (configured && !user) { localStorage.removeItem(GUEST); return showAuth("signin"); } return goAccount(); }
-      if (a === "signup-page") { localStorage.removeItem(GUEST); return showAuth("signup"); }
+      if (a === "menu") return openMenu(b);
+      if (a === "progress") { closeMenu(); return goAccount(); }
+      if (a === "settings") { closeMenu(); goAccount(); setTimeout(() => { const t = $("#acc-settings"); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); return; }
+      if (a === "admin") { closeMenu(); if (isAdmin() && window.setTab) setTab("admin"); return; }
+      if (a === "signout") { closeMenu(); return signOut(); }
+      if (a === "syncnow") { closeMenu(); await syncNow(); return toast("Up to date."); }
+      if (a === "signin-menu") { closeMenu(); localStorage.removeItem(GUEST); return showAuth("signin"); }
+      if (a === "signup-page") { closeMenu(); localStorage.removeItem(GUEST); return showAuth("signup"); }
       if (a === "guest") { localStorage.setItem(GUEST, "1"); hideAuth(); renderAcct(); return; }
       if (a === "signin") {
         if (!val("acct-email") || !val("acct-pw")) return msg("Enter your email and password.");
@@ -435,7 +478,7 @@ window.CLOUD = (() => {
   async function syncNow() { await push(); if (await pull()) applyRemote(false); }
 
   const api = { changed, log, exam, init, configured: () => configured, user: () => user, isAdmin, profile: () => profile, questions: Q, toast,
-    isGuest, showAuth, signOut, saveProfile, changePassword: newPassword, exportData, importData, resetAll, syncNow, activity, daysLeft,
+    isGuest, showAuth, signOut, renderAcct, saveProfile, changePassword: newPassword, exportData, importData, resetAll, syncNow, activity, daysLeft,
     statusLabel: () => STATUS[status], lastError: () => lastErr, _status: () => status };
   setTimeout(init, 0);
   return api;

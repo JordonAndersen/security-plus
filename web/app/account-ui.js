@@ -34,7 +34,7 @@
     const ranked = [1,2,3,4,5].filter(d => score(d) != null).sort((a, b) => score(a) - score(b));
     return { answered: s, acc: s ? c / s : null, hardAcc: hs ? hc / hs : null, seen, bankSize: bank.length,
       pbqPassed, pbqTried, pbqTotal: Q.length, acrMastered, acrTotal: PBQ.acr.length,
-      hist, last3, avg3, best: hist.length ? Math.max(...hist.map(x => x.score)) : null, domAcc, examDom, weakest: ranked[0], ranked };
+      hist, last3, avg3, trend: (() => { if (hist.length < 2) return null; const prev = hist.slice(0, -1).slice(-3); const pa = Math.round(prev.reduce((a, x) => a + x.score, 0) / prev.length); return { d: avg3 - pa, since: hist[hist.length - 2].d }; })(), best: hist.length ? Math.max(...hist.map(x => x.score)) : null, domAcc, examDom, weakest: ranked[0], ranked };
   }
 
   function readiness(m) {
@@ -69,7 +69,7 @@
           <p style="margin:12px 0 4px;font-size:16px">No estimate yet.</p><p class="muted" style="margin:0 0 16px">Answer 20 multiple-choice questions or take a practice exam to see your estimate.</p>
           <div class="mrow"><button class="btn primary" data-accgo="exam">Take a practice exam</button><button class="btn" data-accgo="mcq">Practice questions</button></div></div>`
       : `<div class="card ready"><div class="overline">Estimated readiness</div>
-          <div class="ready-v">${r.v}<span class="of"> / 900</span></div>
+          <div class="ready-v">${r.v}<span class="of"> / 900</span>${m.trend && m.avg3 != null ? `<span class="trend ${m.trend.d > 0 ? "up" : m.trend.d < 0 ? "down" : ""}" title="Change in your 3-exam average since your ${h(when(m.trend.since))} exam">${m.trend.d > 0 ? "▲ +" : m.trend.d < 0 ? "▼ " : "± "}${m.trend.d} since ${h(when(m.trend.since))}</span>` : ""}</div>
           <div class="scale" role="img" aria-label="Score ${r.v} on a 100 to 900 scale; passing is 750"><b class="tone-${r.tone}" style="width:${pos(r.v)}%"></b><span class="pass" style="left:${pos(PASS)}%"></span></div>
           <div class="scale-l"><span>100</span><span style="margin-left:auto;margin-right:${100 - pos(PASS) - 3}%">750 pass</span><span>900</span></div>
           <div class="mrow" style="margin-top:0"><span class="chip ${r.v >= PASS ? "vis-public" : "vis-pending"}">${r.v >= PASS ? "Above passing" : `${PASS - r.v} points to pass`}</span><span class="chip">${h(r.label)}</span></div>
@@ -83,6 +83,15 @@
           <div class="fname">Find your weak spots</div>
           <p class="muted" style="margin:0 0 16px">After about 5 answers per domain (or one practice exam), this card points you at the domain that needs the most work.</p>
           <div class="mrow"><button class="btn primary" data-accgo="mcq">Start practicing</button></div></div>`;
+    const missedMC = typeof MC !== "undefined" && MC.missed ? MC.missed() : 0;
+    const pbqSt = store.get("pbq-status", {}), failedPBQ = Q.filter(q => pbqSt[q.id] === "fail");
+    const goal = window.DAILY ? DAILY.goal() : 20, today = window.DAILY ? DAILY.count() : 0, streak = window.DAILY ? DAILY.streak() : 0;
+    const reviewCard = `<div class="card revq"><div class="revq-h"><div><h3 style="margin:0">Review queue</h3><p class="muted" style="margin:2px 0 0">Questions you got wrong the last time you answered them.</p></div>
+        <div class="goal-line" title="Daily goal">${today >= goal ? "✓ " : ""}<b>${today}</b> / ${goal} today${streak ? ` · 🔥 ${streak}-day streak` : ""}</div></div>
+      <div class="revq-items">
+        <div class="revq-i"><span class="revq-n">${missedMC}</span><span>missed multiple choice</span>${missedMC ? `<button class="btn sm primary" data-accgo="review-mc">Start review session</button>` : `<span class="muted">Nothing missed</span>`}</div>
+        <div class="revq-i"><span class="revq-n">${failedPBQ.length}</span><span>PBQs to retry</span>${failedPBQ.length ? `<button class="btn sm" data-accgo="review-pbq">Retry first one</button>` : `<span class="muted">None failed</span>`}</div>
+      </div></div>`;
     const domRows = [1,2,3,4,5].map(d => `<tr><td data-h="Domain"><div class="dname"><span class="did">${d}.0</span>${h(dName(d))}${d === m.weakest ? ' <span class="chip lvl-hard">Weakest</span>' : ""}</div><div class="dw">${WEIGHT[d]}% of exam</div></td>
       <td data-h="Multiple choice (all time)"><div class="dbar">${bar(m.domAcc[d])}<span class="stat">${m.domAcc[d] == null ? "No answers" : pct(m.domAcc[d])}</span></div></td>
       <td data-h="Last 3 practice exams"><div class="dbar">${bar(m.examDom[d])}<span class="stat">${m.examDom[d] == null ? "No exams" : pct(m.examDom[d])}</span></div></td>
@@ -100,7 +109,7 @@
     const settings = user ? `
       <div class="card"><h3>Profile</h3>
         <div class="row"><label class="f2">Display name<input type="text" id="acc-name" maxlength="60" value="${h((prof && prof.display_name) || "")}"></label>
-        <label class="f2">Exam date<input type="date" id="acc-date" value="${h(date)}"></label></div>
+        <label class="f2">Exam date<input type="date" id="acc-date" value="${h(date)}"></label><label class="f2">Daily goal<select id="acc-goal">${[10,20,30,50,90].map(n => `<option value="${n}" ${n === goal ? "selected" : ""}>${n} questions a day</option>`).join("")}</select></label></div>
         <div class="mrow"><button class="btn primary" data-accgo="save">Save profile</button></div>
         <p class="muted">${h(user.email)} · role: <b>${h((prof && prof.role) || "user")}</b> · sync: ${h(cloud.statusLabel())}${cloud._status() === "error" && cloud.lastError() ? " — " + h(cloud.lastError()) : ""} <button class="linkbtn" data-accgo="sync">Sync now</button></p></div>
       <div class="card"><h3>Password</h3><div class="row"><label class="f2">New password (12+ characters)<input type="password" id="acc-pw" autocomplete="new-password" minlength="12"></label></div>
@@ -109,7 +118,7 @@
         <details><summary class="muted">Danger zone</summary><p class="muted">Deletes all progress, answer history and exam history on every device. Type RESET to confirm.</p>
         <div class="mrow"><input id="acc-reset" placeholder="RESET" style="max-width:140px"><button class="btn danger" data-accgo="reset">Delete my progress</button></div></details></div>
       <div class="mrow"><button class="btn" data-accgo="signout">Sign out</button></div>`
-      : `<div class="card"><h3>Exam date</h3><div class="row"><label class="f2">Exam date<input type="date" id="acc-date" value="${h(date)}"></label></div>
+      : `<div class="card"><h3>Exam date &amp; goal</h3><div class="row"><label class="f2">Exam date<input type="date" id="acc-date" value="${h(date)}"></label><label class="f2">Daily goal<select id="acc-goal">${[10,20,30,50,90].map(n => `<option value="${n}" ${n === goal ? "selected" : ""}>${n} questions a day</option>`).join("")}</select></label></div>
         <div class="mrow"><button class="btn primary" data-accgo="save">Save</button></div></div>
       <div class="card"><h3>Your data</h3><p class="muted">${configured ? "You're studying as a guest, so progress is saved in this browser only." : "Progress on this copy is saved in this browser only."} Export a backup to keep it safe or move it to another device.</p>${ioRow}
         ${configured ? `<div class="mrow"><button class="btn primary" data-acct="signup-page">Create an account to sync across devices</button><button class="btn" data-acct="open">Sign in</button></div>` : ""}</div>`;
@@ -117,6 +126,7 @@
     $("#main").innerHTML = `
       <div class="acc-head"><div>${user ? '<div class="hello">Welcome back,</div>' : '<div class="hello">Your progress</div>'}<h2>${h(user ? name : (cloud && cloud.isGuest() ? "Guest" : "Progress"))}</h2></div>${datePill}</div>
       <div class="acc-top">${readyCard}${focusCard}</div>
+      ${reviewCard}
       <div class="tiles">
         ${tile("Questions answered", m.answered, `${m.seen} of ${m.bankSize} seen`)}
         ${tile("Multiple-choice accuracy", m.acc == null ? '<span class="muted" style="font-size:15px">Not started</span>' : pct(m.acc), m.hardAcc != null ? `Hard questions: ${pct(m.hardAcc)}` : "")}
@@ -127,7 +137,7 @@
       <div class="card"><h3>Last 3 practice exams</h3>${exams}${m.hist.length > 3 ? `<p class="muted">${m.hist.length} total — full history on the Practice exam tab.</p>` : ""}</div>
       <div class="card"><h3>By domain</h3><p class="muted" style="margin:-6px 0 12px">The tick on each bar marks 80% — a comfortable target for exam day.</p><table class="qlist domtbl"><thead><tr><th>Domain</th><th>Multiple choice (all time)</th><th>Last 3 practice exams</th><th></th></tr></thead><tbody>${domRows}</tbody></table></div>
       <div class="card"><h3>Activity — last 14 days</h3><div id="acc-activity">${user ? '<p class="muted">Loading…</p>' : '<p class="muted">Sign in to track daily activity across devices.</p>'}</div></div>
-      <h2 style="margin-top:28px">Settings</h2>${settings}<div class="merr" id="acc-msg"></div>`;
+      <h2 style="margin-top:28px" id="acc-settings">Settings</h2>${settings}<div class="merr" id="acc-msg"></div>`;
     if (user) renderActivity();
   }
 
@@ -154,6 +164,8 @@
       if (a === "drill") { MC.preset({ doms: [+arg], levels: ["easy","medium","hard"], pool: "all", mode: "study" }); return setTab("mcq"); }
       if (a === "exam") return setTab("exam");
       if (a === "mcq") return setTab("mcq");
+      if (a === "review-mc") { setTab("mcq"); if (!MC.review()) msg("Nothing to review."); return; }
+      if (a === "review-pbq") { const i = Q.findIndex(q => store.get("pbq-status", {})[q.id] === "fail"); if (i >= 0) { setTab("pbq"); go(i); } return; }
       if (a === "date") { const d = $("#acc-date"); if (d) { d.scrollIntoView({ behavior: "smooth", block: "center" }); d.focus({ preventScroll: true }); try { d.showPicker && d.showPicker(); } catch (x) {} } return; }
       if (a === "save") { await cloud.saveProfile(v("acc-name").trim() || null, v("acc-date")); await home(); return msg("Saved.", true); }
       if (a === "sync") { await cloud.syncNow(); await home(); return msg("Up to date.", true); }
@@ -164,6 +176,7 @@
     } catch (err) { msg(err.message || String(err)); }
   });
   document.addEventListener("change", async e => {
+    if (TAB === "account" && e.target.id === "acc-goal") { store.set("daily-goal", +e.target.value); if (C()) C().renderAcct(); return home(); }
     if (TAB !== "account" || e.target.id !== "acc-import" || !e.target.files[0]) return;
     try { await C().importData(e.target.files[0]); } catch (err) { msg(err.message); }
   });

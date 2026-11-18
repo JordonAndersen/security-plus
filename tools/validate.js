@@ -89,6 +89,7 @@ for (const q of mc) {
     if (!m || words[m[1].toLowerCase()] !== q.a.length) err(q, `multi-answer question must say "(Choose ${q.a.length === 2 ? "two" : q.a.length}.)" in its text`);
   }
   if (q.o.some(o => /all of the above|none of the above/i.test(o))) err(q, "avoid 'all/none of the above' — options are shuffled");
+  if (q.w !== undefined && (!Array.isArray(q.w) || q.w.length !== q.o.length)) err(q, '"w" (why each option is wrong) must be an array the same length as "o" — use "" for the correct answer');
 }
 const mcDom = [1, 2, 3, 4, 5].map(d => `D${d}: ${mc.filter(q => q.domain === d).length}`).join("  ");
 const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (q.level||"medium") === l).length}`).join(", ");

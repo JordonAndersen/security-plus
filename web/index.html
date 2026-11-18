@@ -508,7 +508,7 @@ td.lbl{font-size:16px;font-weight:500}
 .modal{border-radius:var(--r-lg);padding:24px;box-shadow:var(--shadow-md);border:1px solid var(--line);animation:reveal .18s ease-out both}
 .modal h3{font-size:18px;font-weight:600}
 .modal .mrow{justify-content:flex-end}
-.toast{border-radius:var(--r-lg);box-shadow:var(--shadow-md)}
+.toast{border-radius:var(--r-lg);box-shadow:var(--shadow-md);width:max-content;max-width:calc(100vw - 32px)}
 .merr{color:var(--bad-ink)}.merr.ok{color:var(--ok-ink)}
 
 /* --- Acronyms & ports --- */
@@ -584,6 +584,42 @@ mark{background:var(--warn-bg);color:var(--warn-ink);border-radius:3px}
   .card{padding:16px}
   .card.refbar{top:var(--hdr)}
 }
+/* --- phase 8: account menu, daily goal ring, review queue, trend, why-wrong list --- */
+.acct{gap:10px}
+.acct-btn .caret{font-size:10px;color:var(--muted);margin-left:2px}
+.acct-menu{position:fixed;z-index:70;min-width:240px;max-width:300px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-md);animation:reveal .12s ease-out both}
+.acct-menu button{display:flex;width:100%;align-items:center;gap:8px;height:36px;padding:0 10px;border:0;background:none;border-radius:var(--r-sm);color:var(--ink);font:500 14px var(--font);text-align:left;cursor:pointer}
+.acct-menu button:hover,.acct-menu button:focus-visible{background:var(--chip);outline:0}
+.am-who{display:flex;flex-direction:column;padding:8px 10px 6px;font-size:13px;color:var(--muted);line-height:1.4;min-width:0}
+.am-who b{color:var(--ink);font-size:14px;font-weight:600}
+.am-who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.am-sync{font-size:12px;color:var(--subtle)}
+.am-sep{height:1px;background:var(--line);margin:4px 2px}
+.goal-ring{position:relative;width:36px;height:36px;border:0;background:none;padding:2px;border-radius:50%;cursor:pointer;display:grid;place-items:center;flex:0 0 36px}
+.goal-ring:hover{background:var(--chip)}
+.goal-ring svg{position:absolute;inset:2px}
+.goal-ring .gr-track{fill:none;stroke:var(--line);stroke-width:3}
+.goal-ring .gr-fill{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;transition:stroke-dasharray var(--t-med)}
+.goal-ring.met .gr-fill{stroke:var(--ok)}
+.goal-ring span{position:relative;font:600 11px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.goal-ring.met span{color:var(--ok-ink)}
+@media (max-width:700px){.acct .countdown{display:none}}
+.trend{margin-left:14px;font-size:14px;font-weight:600;letter-spacing:0;color:var(--muted);vertical-align:middle}
+.trend.up{color:var(--ok-ink)}.trend.down{color:var(--bad-ink)}
+.revq{margin-top:16px}
+.revq-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 16px;margin-bottom:14px}
+.goal-line{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.goal-line b{color:var(--ink)}
+.revq-items{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.revq-i{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-md)}
+.revq-i > span:nth-child(2){flex:1;font-size:14px}
+.revq-n{font:600 22px var(--mono);font-variant-numeric:tabular-nums;min-width:32px}
+@media (max-width:700px){.revq-items{grid-template-columns:1fr}}
+.whyopts{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.whyopts summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink)}
+.whyopts ul{margin:8px 0 0;padding-left:18px;font-size:14px;color:var(--muted)}
+.whyopts li{margin:6px 0}.whyopts b{color:var(--ink);font-weight:500}
+.fb-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:14px}
 </style>
 <script>
 // Question registry. Each file in /questions calls PBQ.add([...]).
@@ -646,7 +682,7 @@ window.PBQ = {
 <body>
 <header>
   <h1><span class="brand-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><span>Security+</span> <span class="brand-sub">PBQ Practice Lab</span></h1>
-  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="account">Account</button><button class="tab" data-tab="admin" hidden>Admin</button></span>
+  <span class="tabs"><button class="tab" data-tab="pbq">Performance-based</button><button class="tab" data-tab="mcq">Multiple choice</button><button class="tab" data-tab="exam">Practice exam</button><button class="tab" data-tab="ref">Acronyms &amp; ports</button><button class="tab" data-tab="crash">Crash course</button><button class="tab" data-tab="mine">My questions</button><button class="tab" data-tab="account">Progress</button></span>
   <span class="score" id="score"></span>
   <span class="acct" id="acct"></span>
 </header>
@@ -665,6 +701,16 @@ const store = {
       if(r===null){ const old=localStorage.getItem(k); if(old!==null){ localStorage.setItem(STORE_PREFIX+k,old); localStorage.removeItem(k); r=old; } }
       return r===null ? d : (JSON.parse(r) ?? d); }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem(STORE_PREFIX+k,JSON.stringify(v)); }catch(e){} if(window.CLOUD) CLOUD.changed(k,v); }
+};
+// Daily goal: questions answered per local day (kept 60 days; synced like other progress)
+const DAILY = window.DAILY = {
+  today(d=new Date()){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); },
+  log(){ return store.get("daily-log",{}); },
+  goal(){ return +store.get("daily-goal",20) || 20; },
+  count(){ return this.log()[this.today()]||0; },
+  bump(n=1){ if(!n) return; const l=this.log(), t=this.today(); l[t]=(l[t]||0)+n; const k=Object.keys(l).sort(); while(k.length>60) delete l[k.shift()]; store.set("daily-log",l); if(window.CLOUD&&CLOUD.renderAcct) CLOUD.renderAcct(); },
+  streak(){ const l=this.log(), g=this.goal(), d=new Date(); let k=0; if((l[this.today(d)]||0)<g) d.setDate(d.getDate()-1);
+    while((l[this.today(d)]||0)>=g){ k++; d.setDate(d.getDate()-1); } return k; }
 };
 let status = store.get("pbq-status",{});
 let cur = 0, timerStart = 0, timerId = null, orderState = [], multiOrder = [];
@@ -780,7 +826,7 @@ function render(){
    <div class="result" id="result"></div>
    <p class="tip">Exam tip: performance-based questions come first. On the real exam, flag them, finish the multiple choice, then come back. Partial credit is generally believed to apply, so fill in every field.</p>`;
   if(type==="order") drawOrder();
-  pbqAnswered();
+  pbqAnswered(); window.__pbqCounted=false;
   clearInterval(timerId); timerStart=Date.now();
   timerId=setInterval(()=>{const s=Math.floor((Date.now()-timerStart)/1000);const t=$("#timer");if(t){t.textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;t.style.color=s>(q.time||3)*60?"var(--bad)":""}},1000);
 }
@@ -823,6 +869,7 @@ function grade(){
 }
 function check(){
   const q=Q[cur]; const {right,total}=grade(); const pass=right===total;
+  if(!window.__pbqCounted){ window.__pbqCounted=true; DAILY.bump(1); }
   status[q.id]=pass?"pass":"fail"; store.set("pbq-status",status); renderNav();
   window.CLOUD&&CLOUD.log({question_id:q.id, kind:"pbq", domain:q.domain, level:lvl(q), correct:pass, score:total?+(right/total).toFixed(3):0, source:"pbq"});
   const secs=Math.floor((Date.now()-timerStart)/1000);
@@ -859,7 +906,7 @@ function setTab(t){
   else if(t==="ref"){ try{history.replaceState(null,"","#ref")}catch(e){} REF.home(); }
   else if(t==="crash"){ CC.home(); }
   else if(t==="mine"){ try{history.replaceState(null,"","#mine")}catch(e){} MINE.home(); }
-  else if(t==="account"){ try{history.replaceState(null,"","#account")}catch(e){} ACCOUNT.home(); }
+  else if(t==="account"){ try{history.replaceState(null,"","#progress")}catch(e){} ACCOUNT.home(); }
   else if(t==="admin"){ try{history.replaceState(null,"","#admin")}catch(e){} ADMIN.home(); }
   else { if(!Q.length){ $("#main").innerHTML='<div class="err">No questions loaded.</div>'; return; } go(cur); }
   window.scrollTo(0,0);
@@ -948,7 +995,8 @@ const MC = (() => {
     const right = it.done && same(it.sel, cs);
     const letter = k => String.fromCharCode(65+it.order.indexOf(k));
     const fb = reveal ? `<div class="feedback ${right?"pass":"fail"}" role="status"><p class="verdict">${right?"✓ Correct":`✕ Not quite — the answer ${multi?"is":"is"} ${cs.map(letter).join(" + ")}`}</p>
-      <div class="fb-body"><div class="overline">Explanation</div><p><b>${multi?"Answers":"Answer"}:</b> ${cs.map(k=>`${letter(k)}. ${esc(q.o[k])}`).join(" · ")}</p><p>${esc(q.e)}</p></div></div>` : "";
+      <div class="fb-body"><div class="overline">Explanation</div><p><b>${multi?"Answers":"Answer"}:</b> ${cs.map(k=>`${letter(k)}. ${esc(q.o[k])}`).join(" · ")}</p><p>${esc(q.e)}</p>${whyOthers(q,it,cs,right)}
+      <div class="fb-foot"><button class="linkbtn" data-ccreview="${q.domain}">Review ${esc(DOMAINS[q.domain].replace(/^\d\.0 /,""))} in the Crash course →</button></div></div></div>` : "";
     let btns;
     if(S.mode==="study") btns = it.done
       ? `<button class="btn primary" data-mc="next">${S.i===S.items.length-1?"See results":"Next question →"}</button>`
@@ -970,8 +1018,18 @@ const MC = (() => {
     window.scrollTo(0,0);
   }
 
+  // Optional data: q.w = ["why option 0 is wrong", ...] (same order as q.o). Hidden when a question has none.
+  function whyOthers(q,it,cs,right){
+    if(!Array.isArray(q.w)) return "";
+    const rows=it.order.filter(k=>!cs.includes(k)&&q.w[k]).map(k=>`<li><b>${String.fromCharCode(65+it.order.indexOf(k))}. ${esc(q.o[k])}</b> — ${esc(q.w[k])}</li>`);
+    return rows.length?`<details class="whyopts" ${right?"":"open"}><summary>Why the other options are wrong</summary><ul>${rows.join("")}</ul></details>`:"";
+  }
+  function review(){
+    const qs=shuffle(BANK.filter(q=>stats[q.id]&&stats[q.id].l===0)).slice(0,50);
+    if(!qs.length) return false; prefs.mode="study"; start(qs); return true;
+  }
   function readSel(){ const it=S.items[S.i]; it.sel=[...document.querySelectorAll('input[name=mcopt]:checked')].map(x=>+x.value); }
-  function record(it){ const ok=same(it.sel,correctSet(it.q)); const t=stats[it.q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[it.q.id]=t;
+  function record(it){ DAILY.bump(it.sel.length?1:0); const ok=same(it.sel,correctSet(it.q)); const t=stats[it.q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[it.q.id]=t;
     window.CLOUD&&CLOUD.log({question_id:it.q.id, kind:"mc", domain:it.q.domain, level:lvl(it.q), correct:ok, score:ok?1:0, source:S.mode==="exam"?"exam":"study"}); return ok; }
 
   function finish(){
@@ -1033,10 +1091,10 @@ const MC = (() => {
     if(S.mode==="exam"){ if(k==="f") return click("[data-mc=flag]"); if(k==="arrowright") return click("[data-mc=next]"); if(k==="arrowleft") return click("[data-mc=prev]"); }
   });
   // Lets the practice exam record results into the same per-question stats
-  function rec(q, ok){ const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats();
+  function rec(q, ok, counted=true){ DAILY.bump(counted?1:0); const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats();
     window.CLOUD&&CLOUD.log({question_id:q.id, kind:"mc", domain:q.domain, level:lvl(q), correct:ok, score:ok?1:0, source:"exam"}); }
   function preset(o){ Object.assign(prefs, o); store.set("mcq-prefs", prefs); }
-  return { home, rec, same, correctSet, preset };
+  return { home, rec, same, correctSet, preset, review, missed:()=>BANK.filter(q=>stats[q.id]&&stats[q.id].l===0).length };
 })();
 </script>
 <script>
@@ -1178,7 +1236,7 @@ const EX = (() => {
     const secs=Math.min(X.limit, Math.floor((Date.now()-X.start)/1000));
     const g=X.items.map(gradeItem); let E=0,P=0; const dom={};
     X.items.forEach((it,k)=>{ E+=g[k].e; P+=g[k].p; const d=it.q.domain; dom[d]=dom[d]||{e:0,p:0}; dom[d].e+=g[k].e; dom[d].p+=g[k].p;
-      if(it.kind==="mc") MC.rec(it.q, g[k].ok); else { status[it.q.id]=g[k].ok?"pass":"fail";
+      if(it.kind==="mc") MC.rec(it.q, g[k].ok, answered(it)); else { DAILY.bump(answered(it)?1:0); status[it.q.id]=g[k].ok?"pass":"fail";
         window.CLOUD&&CLOUD.log({question_id:it.q.id, kind:"pbq", domain:it.q.domain, level:lvl(it.q), correct:g[k].ok, score:+g[k].frac.toFixed(3), source:"exam"}); } });
     store.set("pbq-status",status);
     const pct=P?E/P:0, sc=scaled(pct), domPct={}; for(const d in dom) domPct[d]=dom[d].e/dom[d].p;
@@ -1523,10 +1581,11 @@ const CC = (() => {
   return { home, go };
 })();
 function cur_set(i){ cur=i; }
+document.addEventListener("click", e=>{ const r=e.target.closest("[data-ccreview]"); if(r){ const id="d"+r.dataset.ccreview; setTab("crash"); if(PBQ.crash.some(s=>s.id===id)) CC.go(id); } });
 
 // Initial route
 (() => { const h=(location.hash||"").slice(1); if(h==="mcq"||h==="exam"||h==="ref") return setTab(h);
-  if(h==="mine"||h==="admin"||h==="account"){ window.__pendingTab=h; return setTab("pbq"); }   // opened by app/*-ui.js once they load
+  if(h==="mine"||h==="admin"||h==="account"||h==="progress"){ window.__pendingTab=h==="progress"?"account":h; return setTab("pbq"); }   // opened by app/*-ui.js once they load
   if(h==="crash"||h.startsWith("crash-")){ const id=h.slice(6); setTab("crash"); if(id && PBQ.crash.some(s=>s.id===id)) CC.go(id); return; } const hi=Q.findIndex(x=>x.id===h); if(hi>=0) cur=hi; setTab("pbq"); })();
 </script>
 <!-- Cloud sync, question builder/admin, account dashboard -->
