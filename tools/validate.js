@@ -106,7 +106,16 @@ for (const [id, o] of Object.entries(objMap)) {
   if (!OBJ.includes(o)) err(q, `objective "${o}" isn't an SY0-701 objective`);
   else if (+o[0] !== q.domain) err(q, `objective ${o} is outside the question's domain ${q.domain}`);
 }
-const untagged = [...allQ.keys()].filter(id => !objMap[id]);
+for (const q of allQ.values()) if (q.obj !== undefined) {   // objective written directly on a question
+  if (!OBJ.includes(q.obj)) err(q, `objective "${q.obj}" isn't an SY0-701 objective`);
+  else if (+q.obj[0] !== q.domain) err(q, `objective ${q.obj} is outside the question's domain ${q.domain}`);
+  if (objMap[q.id] && objMap[q.id] !== q.obj) err(q, `objective ${q.obj} conflicts with meta/objectives (${objMap[q.id]})`);
+}
+for (const q of mc) if (Array.isArray(q.w) && Array.isArray(q.o) && q.w.length === q.o.length) {   // inline why-lists
+  const ans = Array.isArray(q.a) ? q.a : [q.a];
+  q.w.forEach((t, i) => { if (ans.includes(i) && t) err(q, `w[${i}] is a correct answer and should be ""`); if (!ans.includes(i) && !t) err(q, `w[${i}] (a wrong option) is empty`); });
+}
+const untagged = [...allQ.keys()].filter(id => !objMap[id] && !allQ.get(id).obj);
 if (untagged.length) errors.push(`[meta/objectives] ${untagged.length} question(s) have no objective: ${untagged.slice(0, 10).join(", ")}${untagged.length > 10 ? "…" : ""}`);
 for (const [id, w] of Object.entries(whyMap)) {
   const q = mc.find(x => x.id === id);

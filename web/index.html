@@ -666,6 +666,7 @@ window.OBJECTIVES = OBJECTIVES;
 <script src="mcq/hard-d1-d2.js"></script>
 <script src="mcq/hard-d3-d5.js"></script>
 <script src="mcq/acronym-heavy.js"></script>
+<script src="mcq/objectives-focus.js"></script>
 <!-- Reference: acronyms and ports -->
 <script src="ref/acronyms-a-l.js"></script>
 <script src="ref/acronyms-m-z.js"></script>
@@ -687,6 +688,7 @@ window.OBJECTIVES = OBJECTIVES;
   for (const r of rows) {
     try {
       const d = r.data || {}, base = { id: "u-" + r.id, domain: r.domain, level: r.level, custom: true, author: r.author, vis: r.vis };
+      if (/^[1-5]\.[1-9]$/.test(d.obj || "") && +d.obj[0] === r.domain) base.obj = d.obj;
       if (r.kind === "mc") PBQ.addMC(r.domain, [Object.assign(base, { q: d.q, o: d.o, a: d.a, e: d.e })]);
       else if (r.kind === "pbq-match") PBQ.add([Object.assign(base, { type: "grid", title: d.title, scenario: paras(d.scenario), log: d.log || undefined, task: d.task,
         cols: [d.col || "Answer"], opts: [d.options], rows: (d.rows || []).map(x => ({ l: x.l, a: [x.a], w: x.w || "" })), explain: d.explain, time: 4 })]);

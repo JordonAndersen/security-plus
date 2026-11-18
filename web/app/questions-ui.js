@@ -80,7 +80,7 @@
       ${LIST.length ? `<table class="qlist"><thead><tr><th>Question</th><th>Type</th><th>Domain</th><th>Status</th><th></th></tr></thead><tbody>${LIST.map(q => `<tr>
         <td data-h="Question"><b>${h(title(q).slice(0, 110))}${title(q).length > 110 ? "…" : ""}</b><div class="muted">${h(q.level)} · updated ${when(q.updated_at)}</div>
           ${q.review_note && q.visibility !== "public" ? `<div class="muted" style="color:var(--bad)">Reviewer: ${h(q.review_note)}</div>` : ""}</td>
-        <td data-h="Type">${h(KIND[q.kind])}</td><td data-h="Domain">${h(String(q.domain))}.0</td><td data-h="Status">${visChip(q.visibility)}</td>
+        <td data-h="Type">${h(KIND[q.kind])}</td><td data-h="Domain">${q.data && q.data.obj ? `<span title="${h(objLabel(q))}">${h(q.data.obj)}</span>` : h(String(q.domain)) + ".0"}</td><td data-h="Status">${visChip(q.visibility)}</td>
         <td data-h="Actions" class="qact"><button class="btn sm" data-mine="edit:${h(q.id)}">Edit</button>
           ${q.visibility === "private" || q.visibility === "rejected" ? `<button class="btn sm" data-mine="submit:${h(q.id)}">Submit for sharing</button>` : ""}
           ${q.visibility === "pending" ? `<button class="btn sm" data-mine="private:${h(q.id)}">Withdraw</button>` : ""}
@@ -89,10 +89,13 @@
       <div class="merr" id="mine-msg"></div>`;
   }
 
+  const OB = () => window.OBJECTIVES || {};
+  const objLabel = q => q.data && q.data.obj ? `${q.data.obj} ${OB()[q.data.obj] || ""}` : "";
   function opt(v, cur, label) { return `<option value="${h(v)}" ${String(v) === String(cur) ? "selected" : ""}>${h(label ?? v)}</option>`; }
   function editor(errors) {
     const q = ED, d = q.data;
     const head = `<div class="row"><label class="f2">Domain<select data-ed="domain">${[1,2,3,4,5].map(n => opt(n, q.domain, DOM[n])).join("")}</select></label>
+      <label class="f2">Exam objective<select data-ed="obj"><option value="" ${d.obj ? "" : "selected"} disabled>Choose an objective…</option>${Object.keys(OB()).filter(k => +k[0] === q.domain).map(k => opt(k, d.obj, `${k} ${OB()[k]}`)).join("")}</select></label>
       <label class="f2">Difficulty<select data-ed="level">${["easy","medium","hard"].map(l => opt(l, q.level, l[0].toUpperCase() + l.slice(1))).join("")}</select></label></div>`;
     let body = "";
     if (q.kind === "mc") {
@@ -136,6 +139,7 @@
   function read() {
     if (!ED) return; const d = ED.data, v = s => { const el = $(`[data-ed="${s}"]`); return el ? el.value : undefined; };
     if (v("domain")) ED.domain = +v("domain"); if (v("level")) ED.level = v("level");
+    { const o = v("obj"); if (o !== undefined) d.obj = o || ""; if (d.obj && +d.obj[0] !== ED.domain) d.obj = ""; }
     if (ED.kind === "mc") {
       d.q = v("q") ?? d.q; d.e = v("e") ?? d.e;
       d.o = d.o.map((o, i) => { const el = $(`[data-ed-opt="${i}"]`); return el ? el.value : o; });
@@ -150,6 +154,9 @@
     }
   }
   function clean(kind, d) {   // trim + drop empty optional fields before saving
+    const r = cleanBody(kind, d); if (d.obj && ED && +d.obj[0] === ED.domain) r.obj = d.obj; return r;
+  }
+  function cleanBody(kind, d) {
     const t = s => String(s || "").trim();
     if (kind === "mc") return { q: t(d.q), o: d.o.map(t), a: d.a, e: t(d.e) };
     const base = { title: t(d.title), scenario: t(d.scenario), task: t(d.task), explain: t(d.explain) };
@@ -179,6 +186,7 @@
       preview: () => { read(); $("#mine-preview").innerHTML = `<div class="card"><h3>Preview (with answers)</h3>${preview(ED.kind, clean(ED.kind, ED.data))}</div>`; },
       save: async () => {
         read(); const data = clean(ED.kind, ED.data), errs = validate(ED.kind, data);
+        if (!data.obj) errs.unshift("Choose the exam objective this question tests.");
         if (errs.length) return editor(errs);
         busy = true; b.disabled = true;
         try {
@@ -195,6 +203,9 @@
       }
     };
     try { busy = act !== "save"; await (ops[act] || (() => {}))(); } catch (err) { msg(err.message); } finally { if (act !== "save") busy = false; }
+  });
+  document.addEventListener("change", e => {   // changing the domain refreshes the objective list
+    if (TAB === "mine" && ED && e.target.dataset && e.target.dataset.ed === "domain") { read(); editor(); }
   });
   document.addEventListener("change", e => {   // options textarea drives the answer dropdowns
     if (TAB === "mine" && ED && ED.kind === "pbq-match" && e.target.dataset && e.target.dataset.ed === "options") { read(); editor(); }
@@ -213,7 +224,7 @@
       const who = Object.fromEntries(profs.map(p => [p.id, p]));
       $("#adm-body").innerHTML = qs.length ? qs.sort((a, b) => (a.updated_at || "").localeCompare(b.updated_at || "")).map(q => {
         const p = who[q.owner_id] || {};
-        return `<div class="card"><div class="meta"><span class="chip">${h(KIND[q.kind])}</span><span class="chip">${h(DOM[q.domain])}</span><span class="chip">${h(q.level)}</span>${visChip(q.visibility)}
+        return `<div class="card"><div class="meta"><span class="chip">${h(KIND[q.kind])}</span><span class="chip">${h(DOM[q.domain])}</span>${objLabel(q) ? `<span class="chip obj">${h(objLabel(q))}</span>` : ""}<span class="chip">${h(q.level)}</span>${visChip(q.visibility)}
           <span class="muted">by ${h(p.display_name || "?")} (${h(p.email || "")}) · updated ${when(q.updated_at)}</span></div>
           ${preview(q.kind, q.data)}
           <div class="mrow" style="margin-top:12px"><input type="text" data-adm-note="${h(q.id)}" maxlength="500" placeholder="Note to the author (required to request changes)" style="flex:1;min-width:220px" value="${h(q.review_note || "")}">

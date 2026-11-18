@@ -11,6 +11,7 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? "  ✓ " : "  ✗ "
   await db.exec(fs.readFileSync(M + "0002_roles_custom_questions.sql", "utf8"));
   await db.exec(fs.readFileSync(M + "0003_lock_trigger_functions.sql", "utf8"));
   await db.exec(fs.readFileSync(M + "0004_fix_validate_grant.sql", "utf8"));
+  await db.exec(fs.readFileSync(M + "0005_question_objective.sql", "utf8"));
   console.log("migrations applied");
   const mk = async (email, name) => (await db.query("insert into auth.users(email, raw_user_meta_data) values ($1, $2) returning id", [email, { display_name: name }])).rows[0].id;
   const A = await mk("jordon@example.com", "Jordon"), B = await mk("other@example.com", "Other");
@@ -70,6 +71,10 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? "  ✓ " : "  ✗ "
   ok(!!(await as(A, "select admin_set_role($1,'user')", [A])).error, "cannot demote the last admin");
   ok(!!(await as(B, "select admin_set_role($1,'admin')", [B])).error, "non-admin cannot use admin_set_role");
   ok((await as(C, "select count(*)::int c from question_authors(array[$1::uuid])", [B])).rows[0].c === 0, "author names only exposed for public question authors");
+  const mo = o => ({ q: "Which objective tag is this?", o: ["A", "B", "C"], a: 0, e: "Because.", obj: o });
+  ok(!(await as(B, "insert into custom_questions(kind,domain,data) values ('mc',4,$1)", [mo("4.7")])).error, "question with a valid objective in its domain is accepted");
+  ok(!!(await as(B, "insert into custom_questions(kind,domain,data) values ('mc',4,$1)", [mo("2.4")])).error, "objective from another domain is rejected");
+  ok(!!(await as(B, "insert into custom_questions(kind,domain,data) values ('mc',4,$1)", [mo("4.10")])).error, "made-up objective is rejected");
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error("FATAL", e.message); process.exit(1); });
