@@ -91,6 +91,32 @@ for (const q of mc) {
   if (q.o.some(o => /all of the above|none of the above/i.test(o))) err(q, "avoid 'all/none of the above' — options are shuffled");
   if (q.w !== undefined && (!Array.isArray(q.w) || q.w.length !== q.o.length)) err(q, '"w" (why each option is wrong) must be an array the same length as "o" — use "" for the correct answer');
 }
+// ---- Meta: objective tags and per-option explanations ----
+const OBJ = ["1.1","1.2","1.3","1.4","2.1","2.2","2.3","2.4","2.5","3.1","3.2","3.3","3.4","4.1","4.2","4.3","4.4","4.5","4.6","4.7","4.8","4.9","5.1","5.2","5.3","5.4","5.5","5.6"];
+const metaDir = path.join(__dirname, "..", "web", "meta"), objMap = {}, whyMap = {};
+if (fs.existsSync(metaDir)) for (const f of fs.readdirSync(metaDir).filter(f => f.endsWith(".js")).sort()) {
+  if (!index.includes(`meta/${f}`)) errors.push(`[${f}] not referenced by a <script src> tag in index.html`);
+  try { vm.runInNewContext(fs.readFileSync(path.join(metaDir, f), "utf8"), { PBQ: { addObjectives: m => Object.assign(objMap, m), addWhy: m => Object.assign(whyMap, m) } }, { filename: f }); }
+  catch (e) { errors.push(`[${f}] failed to load: ${e.message}`); }
+}
+const allQ = new Map([...bank, ...mc].map(q => [q.id, q]));
+for (const [id, o] of Object.entries(objMap)) {
+  const q = allQ.get(id);
+  if (!q) { errors.push(`[meta/objectives] unknown question id "${id}"`); continue; }
+  if (!OBJ.includes(o)) err(q, `objective "${o}" isn't an SY0-701 objective`);
+  else if (+o[0] !== q.domain) err(q, `objective ${o} is outside the question's domain ${q.domain}`);
+}
+const untagged = [...allQ.keys()].filter(id => !objMap[id]);
+if (untagged.length) errors.push(`[meta/objectives] ${untagged.length} question(s) have no objective: ${untagged.slice(0, 10).join(", ")}${untagged.length > 10 ? "…" : ""}`);
+for (const [id, w] of Object.entries(whyMap)) {
+  const q = mc.find(x => x.id === id);
+  if (!q) { errors.push(`[meta/why] unknown multiple-choice id "${id}"`); continue; }
+  const ans = Array.isArray(q.a) ? q.a : [q.a];
+  if (!Array.isArray(w) || w.length !== q.o.length) { err(q, `why list must have ${q.o.length} entries`); continue; }
+  w.forEach((t, i) => { if (ans.includes(i) && t) err(q, `why entry ${i} is a correct answer and should be ""`); if (!ans.includes(i) && !t) err(q, `why entry ${i} (a wrong option) is empty`); });
+}
+console.log(`Meta: ${Object.keys(objMap).length} objective tags, ${Object.keys(whyMap).length} questions with per-option explanations`);
+
 const mcDom = [1, 2, 3, 4, 5].map(d => `D${d}: ${mc.filter(q => q.domain === d).length}`).join("  ");
 const lv = list => ["easy","medium","hard"].map(l => `${l}: ${list.filter(q => (q.level||"medium") === l).length}`).join(", ");
 console.log(`Levels — PBQ ${lv(bank)} | MC ${lv(mc)}`);

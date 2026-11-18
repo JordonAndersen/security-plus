@@ -340,6 +340,7 @@ body[data-page=account] .wrap.single main{max-width:1050px}
 .chip.lvl-easy{background:var(--chip);color:var(--muted)}
 .chip.lvl-medium{background:var(--chip);color:var(--muted)}
 .chip.dom{background:var(--accent-soft);color:var(--accent-soft-ink)}
+.chip.obj{background:var(--panel);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-strong);font-variant-numeric:tabular-nums}
 .chip.flagged,.flagged{background:var(--warn-bg);color:var(--warn-ink)}
 .chip-custom{background:var(--accent-soft);color:var(--accent-soft-ink)}
 .vis-pending{background:var(--warn-bg)!important;color:var(--warn-ink)!important}
@@ -619,6 +620,7 @@ mark{background:var(--warn-bg);color:var(--warn-ink);border-radius:3px}
 .whyopts summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink)}
 .whyopts ul{margin:8px 0 0;padding-left:18px;font-size:14px;color:var(--muted)}
 .whyopts li{margin:6px 0}.whyopts b{color:var(--ink);font-weight:500}
+.allobj{margin-top:14px}.allobj summary{cursor:pointer;font-size:14px;font-weight:600;margin-bottom:10px}
 .fb-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:14px}
 </style>
 <script>
@@ -630,8 +632,20 @@ window.PBQ = {
   acr: [], ports: [],
   addAcronyms(list){ this.acr.push(...list); },   // reference: acronyms
   addPorts(list){ this.ports.push(...list); },    // reference: ports
-  crash: [], addCrash(list){ this.crash.push(...list); }  // crash course sections
+  crash: [], addCrash(list){ this.crash.push(...list); },  // crash course sections
+  obj: {}, addObjectives(m){ Object.assign(this.obj, m); },  // meta: question id -> SY0-701 objective ("2.4")
+  why: {}, addWhy(m){ Object.assign(this.why, m); },          // meta: MC id -> why each wrong option is wrong
+  apply(){ for (const q of [...this.bank, ...this.mc]) { if (this.obj[q.id] && !q.obj) q.obj = this.obj[q.id]; if (this.why[q.id] && !q.w) q.w = this.why[q.id]; } }
 };
+// SY0-701 exam objectives
+const OBJECTIVES = {
+  "1.1":"Security controls", "1.2":"Fundamental security concepts", "1.3":"Change management", "1.4":"Cryptographic solutions",
+  "2.1":"Threat actors and motivations", "2.2":"Threat vectors and attack surfaces", "2.3":"Types of vulnerabilities", "2.4":"Indicators of malicious activity", "2.5":"Mitigation techniques",
+  "3.1":"Architecture models", "3.2":"Securing enterprise infrastructure", "3.3":"Protecting data", "3.4":"Resilience and recovery",
+  "4.1":"Securing computing resources", "4.2":"Asset management", "4.3":"Vulnerability management", "4.4":"Alerting and monitoring", "4.5":"Enhancing enterprise security", "4.6":"Identity and access management", "4.7":"Automation and orchestration", "4.8":"Incident response", "4.9":"Data sources for investigations",
+  "5.1":"Security governance", "5.2":"Risk management", "5.3":"Third-party risk", "5.4":"Security compliance", "5.5":"Audits and assessments", "5.6":"Security awareness"
+};
+window.OBJECTIVES = OBJECTIVES;
 </script>
 <!-- PBQ bank: one file per exam domain (or topic). Add new files here. -->
 <script src="questions/d1-general-concepts.js"></script>
@@ -658,6 +672,10 @@ window.PBQ = {
 <script src="ref/ports.js"></script>
 <!-- Crash course -->
 <script src="crash/content.js"></script>
+<!-- Meta: exam objective tags and per-option explanations, layered onto the banks above -->
+<script src="meta/objectives.js"></script>
+<script src="meta/why-hard.js"></script>
+<script>PBQ.apply();</script>
 <!-- User-created questions: loaded from the cache that app/cloud.js keeps in sync with Supabase.
      User text is always escaped (scenario is converted to plain paragraphs, never raw HTML). -->
 <script>
@@ -762,6 +780,7 @@ const lvlOk = q => pbqLevel==="all" || lvl(q)===pbqLevel;
 const visibleIdx = () => Q.map((q,i)=>i).filter(i=>lvlOk(Q[i]));
 const lvlChip = q => `<span class="chip lvl-${lvl(q)}">${LEVELS[lvl(q)]}</span>` + (q.custom ? `<span class="chip chip-custom" title="User-created question">Custom · ${esc(q.author||"")}${q.vis&&q.vis!=="public"?" ("+esc(q.vis)+")":""}</span>` : "");
 
+const objChip = q => q.obj && OBJECTIVES[q.obj] ? `<span class="chip obj" title="Exam objective ${q.obj}: ${esc(OBJECTIVES[q.obj])}">${q.obj} ${esc(OBJECTIVES[q.obj])}</span>` : "";
 function renderNav(){
   const pass = Q.filter(q=>status[q.id]==="pass").length;
   $("#score").textContent = `${pass} / ${Q.length} passed`;
@@ -810,7 +829,7 @@ function render(){
   }
   $("#main").innerHTML = `
    <div class="mobile-nav"><select id="mnav">${Q.map((x,i)=>lvlOk(x)||i===cur?`<option value="${i}" ${i===cur?"selected":""}>${i+1}. ${esc(x.title)}${lvl(x)==="hard"?" [HARD]":""} ${status[x.id]==="pass"?"✓":status[x.id]==="fail"?"✗":""}</option>`:"").join("")}</select></div>
-   <div class="meta"><span class="chip">PBQ ${cur+1} of ${Q.length}</span>${lvlChip(q)}<span class="chip dom">${esc(DOMAINS[q.domain])}</span><span class="chip">Target: ~${q.time||3} min</span></div>
+   <div class="meta"><span class="chip">PBQ ${cur+1} of ${Q.length}</span>${lvlChip(q)}<span class="chip dom">${esc(DOMAINS[q.domain])}</span>${objChip(q)}<span class="chip">Target: ~${q.time||3} min</span></div>
    <h2>${esc(q.title)}</h2>
    <div class="scenario">${q.scenario}${q.log?`<pre class="log">${esc(q.log)}</pre>`:""}</div>${TERM.html(q)}
    <p class="task">${esc(q.task)}</p>
@@ -917,7 +936,7 @@ function setTab(t){
 const MC = (() => {
   const BANK = PBQ.mc;
   let stats = store.get("mcq-stats", {});      // id -> {s: seen, c: correct, l: last result (1/0)}
-  let prefs = Object.assign({doms:[1,2,3,4,5], n:25, mode:"study", pool:"all", levels:["easy","medium","hard"]}, store.get("mcq-prefs", {}));
+  let prefs = Object.assign({doms:[1,2,3,4,5], n:25, mode:"study", pool:"all", levels:["easy","medium","hard"], obj:""}, store.get("mcq-prefs", {}));
   let S = null, tick = null;                  // current session
 
   const saveStats = () => store.set("mcq-stats", stats);
@@ -935,7 +954,7 @@ const MC = (() => {
   }
 
   function pool(){
-    return BANK.filter(q=>prefs.doms.includes(q.domain) && prefs.levels.includes(lvl(q))).filter(q=>{
+    return BANK.filter(q=>prefs.doms.includes(q.domain) && prefs.levels.includes(lvl(q)) && (!prefs.obj || q.obj===prefs.obj)).filter(q=>{
       const t=stats[q.id];
       if(prefs.pool==="unseen") return !t;
       if(prefs.pool==="missed") return t && t.l===0;
@@ -955,6 +974,7 @@ const MC = (() => {
       <h2>Multiple-choice practice</h2>
       <p class="muted">${BANK.length} questions in the bank. Your accuracy is tracked per question in this browser, so “missed” and “weak” pools always target what you need most.</p>
       <div class="card"><h3>Domains</h3><div class="doms">${doms}</div></div>
+      <div class="card"><h3>Exam objective</h3><div class="row" style="align-items:center"><select id="mcobj" style="max-width:520px"><option value="">All objectives</option>${[1,2,3,4,5].map(d=>`<optgroup label="${esc(DOMAINS[d])}">${Object.keys(OBJECTIVES).filter(k=>+k[0]===d).map(k=>{const qs=BANK.filter(q=>q.obj===k);return `<option value="${k}" ${prefs.obj===k?"selected":""}>${k} ${esc(OBJECTIVES[k])} (${qs.length} · ${pct(acc(qs))})</option>`}).join("")}</optgroup>`).join("")}</select>${prefs.obj?`<span class="chip obj">Drilling ${prefs.obj} only</span>`:""}</div></div>
       <div class="card"><h3>Difficulty</h3><div class="levels">
         ${["hard","medium","easy"].filter(l=>BANK.some(q=>lvl(q)===l)).map(l=>{const qs=BANK.filter(q=>lvl(q)===l);const a=acc(qs);return `<label><input type="checkbox" data-lvl="${l}" ${prefs.levels.includes(l)?"checked":""}> <span class="chip lvl-${l}">${LEVELS[l]}</span> <span class="muted">${qs.length} questions · ${pct(a)} correct</span></label>`}).join("")}
         <button class="btn" data-mc="hardonly" style="padding:5px 12px;margin-left:auto">Hard only — cram mode</button>
@@ -1010,7 +1030,7 @@ const MC = (() => {
     const sess = `<div class="sessbar">${segs}<div class="sessmeta"><span>${S.i+1} of ${S.items.length}</span>${S.mode==="study"?`<span><span class="dot dot-ok"></span>${nOk} correct<span class="dot-bad"></span>${nBad} missed</span>`:`<span>${S.items.filter(x=>x.sel.length).length} answered${S.items.some(x=>x.flag)?` · ${S.items.filter(x=>x.flag).length} flagged`:""}</span>`}</div></div>`;
     const keys = `<span class="keys"><span><kbd>A</kbd>–<kbd>${String.fromCharCode(64+Math.min(it.order.length,9))}</kbd> choose</span>${S.mode==="study"?`<span><kbd>Enter</kbd> ${it.done?"next":"submit"}</span>`:`<span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>F</kbd> flag</span>`}</span>`;
     $("#main").innerHTML = `${sess}
-      <div class="meta"><span class="chip">Question ${S.i+1} of ${S.items.length}</span>${lvlChip(q)}<span class="chip dom">${esc(DOMAINS[q.domain])}</span>${S.mode==="exam"?`<span class="chip">Time left <b id="mctimer" class="timer">${fmt(Math.max(0,S.limit-Math.floor((Date.now()-S.start)/1000)))}</b></span>`:""}${it.flag?'<span class="chip flagged">Flagged</span>':""}</div>
+      <div class="meta"><span class="chip">Question ${S.i+1} of ${S.items.length}</span>${lvlChip(q)}<span class="chip dom">${esc(DOMAINS[q.domain])}</span>${objChip(q)}${S.mode==="exam"?`<span class="chip">Time left <b id="mctimer" class="timer">${fmt(Math.max(0,S.limit-Math.floor((Date.now()-S.start)/1000)))}</b></span>`:""}${it.flag?'<span class="chip flagged">Flagged</span>':""}</div>
       <p class="qtext">${esc(q.q)}${multi&&!/choose/i.test(q.q)?` <span class="muted">(Choose ${["","one","two","three","four"][need]||need}.)</span>`:""}</p>
       <ul class="opts">${opts}</ul>${fb}
       <div class="actions">${btns}<button class="btn" data-mc="quit" style="margin-left:auto">${S.mode==="exam"?"Finish now":"End session"}</button></div>${gridNav}
@@ -1076,6 +1096,7 @@ const MC = (() => {
     if(t.dataset && t.dataset.dom){ const d=+t.dataset.dom; prefs.doms = t.checked ? [...new Set([...prefs.doms,d])] : prefs.doms.filter(x=>x!==d); }
     else if(t.dataset && t.dataset.lvl){ const l=t.dataset.lvl; prefs.levels = t.checked ? [...new Set([...prefs.levels,l])] : prefs.levels.filter(x=>x!==l); }
     else if(["mode","pool","n"].includes(t.name)){ prefs[t.name] = t.name==="n" ? +t.value : t.value; }
+    else if(t.id==="mcobj"){ prefs.obj=t.value; if(prefs.obj){ const d=+prefs.obj[0]; if(!prefs.doms.includes(d)) prefs.doms=[...prefs.doms,d]; } store.set("mcq-prefs",prefs); return home(); }
     else return;
     store.set("mcq-prefs",prefs); info();
   });
@@ -1093,7 +1114,7 @@ const MC = (() => {
   // Lets the practice exam record results into the same per-question stats
   function rec(q, ok, counted=true){ DAILY.bump(counted?1:0); const t=stats[q.id]||{s:0,c:0,l:0}; t.s++; if(ok)t.c++; t.l=ok?1:0; stats[q.id]=t; saveStats();
     window.CLOUD&&CLOUD.log({question_id:q.id, kind:"mc", domain:q.domain, level:lvl(q), correct:ok, score:ok?1:0, source:"exam"}); }
-  function preset(o){ Object.assign(prefs, o); store.set("mcq-prefs", prefs); }
+  function preset(o){ Object.assign(prefs, {obj:""}, o); store.set("mcq-prefs", prefs); }
   return { home, rec, same, correctSet, preset, review, missed:()=>BANK.filter(q=>stats[q.id]&&stats[q.id].l===0).length };
 })();
 </script>

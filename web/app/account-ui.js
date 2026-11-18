@@ -21,6 +21,8 @@
       if (q) { dom[q.domain].s += t.s; dom[q.domain].c += t.c; if (lvl(q) === "hard") { hs += t.s; hc += t.c; } }
     }
     const seen = bank.filter(q => mc[q.id]).length;
+    const objStat = {};
+    for (const q of bank) { const t = mc[q.id]; if (!q.obj) continue; const o = objStat[q.obj] = objStat[q.obj] || { s: 0, c: 0, n: 0 }; o.n++; if (t) { o.s += t.s; o.c += t.c; } }
     const pbqStatus = store.get("pbq-status", {});
     const pbqPassed = Q.filter(q => pbqStatus[q.id] === "pass").length, pbqTried = Q.filter(q => pbqStatus[q.id]).length;
     const known = store.get("ref-known", {}), acrMastered = PBQ.acr.filter(a => known["a:" + a.a] === 1).length;
@@ -34,7 +36,7 @@
     const ranked = [1,2,3,4,5].filter(d => score(d) != null).sort((a, b) => score(a) - score(b));
     return { answered: s, acc: s ? c / s : null, hardAcc: hs ? hc / hs : null, seen, bankSize: bank.length,
       pbqPassed, pbqTried, pbqTotal: Q.length, acrMastered, acrTotal: PBQ.acr.length,
-      hist, last3, avg3, trend: (() => { if (hist.length < 2) return null; const prev = hist.slice(0, -1).slice(-3); const pa = Math.round(prev.reduce((a, x) => a + x.score, 0) / prev.length); return { d: avg3 - pa, since: hist[hist.length - 2].d }; })(), best: hist.length ? Math.max(...hist.map(x => x.score)) : null, domAcc, examDom, weakest: ranked[0], ranked };
+      objStat, hist, last3, avg3, trend: (() => { if (hist.length < 2) return null; const prev = hist.slice(0, -1).slice(-3); const pa = Math.round(prev.reduce((a, x) => a + x.score, 0) / prev.length); return { d: avg3 - pa, since: hist[hist.length - 2].d }; })(), best: hist.length ? Math.max(...hist.map(x => x.score)) : null, domAcc, examDom, weakest: ranked[0], ranked };
   }
 
   function readiness(m) {
@@ -77,7 +79,7 @@
     const focusCard = m.weakest
       ? `<div class="card focus"><div class="overline">Focus next</div>
           <div class="fname">${h(dName(m.weakest))}</div>
-          <p class="muted" style="margin:0 0 16px">Your weakest domain · ${WEIGHT[m.weakest]}% of the exam · ${pct(m.examDom[m.weakest] != null ? m.examDom[m.weakest] : m.domAcc[m.weakest])} correct</p>
+          <p class="muted" style="margin:0 0 16px">Your weakest domain · ${WEIGHT[m.weakest]}% of the exam · ${pct(m.examDom[m.weakest] != null ? m.examDom[m.weakest] : m.domAcc[m.weakest])} correct${(() => { const OBk = window.OBJECTIVES || {}; const w = Object.entries(m.objStat).filter(([k, o]) => +k[0] === m.weakest && o.s >= 3).sort((a, b) => a[1].c / a[1].s - b[1].c / b[1].s)[0]; return w ? `<br>Weakest objective here: <b>${w[0]} ${h(OBk[w[0]] || "")}</b> (${pct(w[1].c / w[1].s)})` : ""; })()}</p>
           <div class="mrow"><button class="btn primary" data-accgo="drill:${m.weakest}">Drill this domain</button><button class="btn" data-accgo="exam">Practice exam</button></div></div>`
       : `<div class="card focus"><div class="overline">Focus next</div>
           <div class="fname">Find your weak spots</div>
@@ -92,6 +94,16 @@
         <div class="revq-i"><span class="revq-n">${missedMC}</span><span>missed multiple choice</span>${missedMC ? `<button class="btn sm primary" data-accgo="review-mc">Start review session</button>` : `<span class="muted">Nothing missed</span>`}</div>
         <div class="revq-i"><span class="revq-n">${failedPBQ.length}</span><span>PBQs to retry</span>${failedPBQ.length ? `<button class="btn sm" data-accgo="review-pbq">Retry first one</button>` : `<span class="muted">None failed</span>`}</div>
       </div></div>`;
+    const OB = window.OBJECTIVES || {};
+    const objRows = Object.keys(OB).map(k => { const o = m.objStat[k] || { s: 0, c: 0, n: 0 }; return { k, name: OB[k], s: o.s, n: o.n, a: o.s ? o.c / o.s : null }; });
+    const weakObj = objRows.filter(o => o.s >= 3).sort((a, b) => a.a - b.a).slice(0, 5);
+    const objRow = o => `<tr><td data-h="Objective"><div class="dname"><span class="did">${o.k}</span>${h(o.name)}</div><div class="dw">${o.n} questions in the bank · ${o.s} answers</div></td>
+      <td data-h="Accuracy"><div class="dbar">${bar(o.a)}<span class="stat">${o.a == null ? "No answers" : pct(o.a)}</span></div></td>
+      <td><button class="btn sm ghost" data-accgo="drillobj:${o.k}">Drill →</button></td></tr>`;
+    const objCard = `<div class="card"><h3>By exam objective</h3>
+      ${weakObj.length ? `<p class="muted" style="margin:-6px 0 12px">Your 5 weakest objectives (at least 3 answers each). Drill one to practice only those questions.</p><table class="qlist domtbl"><thead><tr><th>Objective</th><th>Multiple-choice accuracy</th><th></th></tr></thead><tbody>${weakObj.map(objRow).join("")}</tbody></table>`
+        : `<p class="muted" style="margin:-6px 0 12px">Answer at least 3 questions in an objective to see where you're weakest.</p>`}
+      <details class="allobj"><summary>All ${objRows.length} objectives</summary><table class="qlist domtbl"><thead><tr><th>Objective</th><th>Multiple-choice accuracy</th><th></th></tr></thead><tbody>${objRows.map(objRow).join("")}</tbody></table></details></div>`;
     const domRows = [1,2,3,4,5].map(d => `<tr><td data-h="Domain"><div class="dname"><span class="did">${d}.0</span>${h(dName(d))}${d === m.weakest ? ' <span class="chip lvl-hard">Weakest</span>' : ""}</div><div class="dw">${WEIGHT[d]}% of exam</div></td>
       <td data-h="Multiple choice (all time)"><div class="dbar">${bar(m.domAcc[d])}<span class="stat">${m.domAcc[d] == null ? "No answers" : pct(m.domAcc[d])}</span></div></td>
       <td data-h="Last 3 practice exams"><div class="dbar">${bar(m.examDom[d])}<span class="stat">${m.examDom[d] == null ? "No exams" : pct(m.examDom[d])}</span></div></td>
@@ -136,6 +148,7 @@
       </div>
       <div class="card"><h3>Last 3 practice exams</h3>${exams}${m.hist.length > 3 ? `<p class="muted">${m.hist.length} total — full history on the Practice exam tab.</p>` : ""}</div>
       <div class="card"><h3>By domain</h3><p class="muted" style="margin:-6px 0 12px">The tick on each bar marks 80% — a comfortable target for exam day.</p><table class="qlist domtbl"><thead><tr><th>Domain</th><th>Multiple choice (all time)</th><th>Last 3 practice exams</th><th></th></tr></thead><tbody>${domRows}</tbody></table></div>
+      ${objCard}
       <div class="card"><h3>Activity — last 14 days</h3><div id="acc-activity">${user ? '<p class="muted">Loading…</p>' : '<p class="muted">Sign in to track daily activity across devices.</p>'}</div></div>
       <h2 style="margin-top:28px" id="acc-settings">Settings</h2>${settings}<div class="merr" id="acc-msg"></div>`;
     if (user) renderActivity();
@@ -161,6 +174,7 @@
     const b = e.target.closest("[data-accgo]"); if (!b) return;
     const [a, arg] = b.dataset.accgo.split(":"), cloud = C(), v = id => ($("#" + id) || {}).value || "";
     try {
+      if (a === "drillobj") { MC.preset({ doms: [+arg[0]], levels: ["easy","medium","hard"], pool: "all", mode: "study", obj: arg }); return setTab("mcq"); }
       if (a === "drill") { MC.preset({ doms: [+arg], levels: ["easy","medium","hard"], pool: "all", mode: "study" }); return setTab("mcq"); }
       if (a === "exam") return setTab("exam");
       if (a === "mcq") return setTab("mcq");
