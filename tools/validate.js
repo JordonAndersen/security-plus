@@ -56,6 +56,38 @@ for (const q of bank) {
       const words = { one:1,two:2,three:3,four:4,five:5,six:6,seven:7 };
       if (m && words[m[1].toLowerCase()] && words[m[1].toLowerCase()] !== n) err(q, `task says ${m[1]} but ${n} choices are correct`);
     }
+  } else if (type === "build" || type === "topo") {
+    const ids = new Set();
+    for (const n of [...(q.nodes || []), ...(q.slots || [])]) {
+      if (!n.id) err(q, "diagram item missing id");
+      if (ids.has(n.id)) err(q, `duplicate diagram id "${n.id}"`); ids.add(n.id);
+      if (!(n.x >= 0 && n.x <= 100 && n.y >= 0 && n.y <= 100)) err(q, `"${n.id}": x and y must be percentages 0–100`);
+    }
+    for (const n of q.nodes || []) if (!n.label) err(q, `node "${n.id}" needs a label`);
+    for (const l of q.links || []) if (!ids.has(l[0]) || !ids.has(l[1])) err(q, `link ${JSON.stringify(l)} refers to an unknown id`);
+    if (type === "build") {
+      if (!Array.isArray(q.devices) || q.devices.length < 3) err(q, "build needs a devices list (3+)");
+      if (!Array.isArray(q.slots) || q.slots.length < 3) err(q, "build needs at least 3 slots");
+      (q.slots || []).forEach(sl => {
+        if (!(q.devices || []).includes(sl.a)) err(q, `slot "${sl.id}": answer "${sl.a}" isn't in devices`);
+        if (!sl.hint) err(q, `slot "${sl.id}" needs a hint`); if (!sl.w) err(q, `slot "${sl.id}" needs an explanation "w"`);
+      });
+    } else {
+      if (!Array.isArray(q.choices) || q.choices.length < 2) err(q, "topo needs choices (e.g. Clean/Infected/Origin)");
+      const cl = (q.nodes || []).filter(n => n.a !== undefined);
+      if (cl.length < 2) err(q, "topo needs at least 2 nodes to classify (with \"a\")");
+      cl.forEach(n => { if (!(q.choices || []).includes(n.a)) err(q, `node "${n.id}": answer "${n.a}" isn't in choices`); if (!n.w) err(q, `node "${n.id}" needs an explanation "w"`);
+        if (!n.views || !Object.keys(n.views).length) err(q, `node "${n.id}" needs views to inspect`); });
+      (q.nodes || []).forEach(n => Object.entries(n.views || {}).forEach(([k, v]) => { if (typeof v !== "string") err(q, `node "${n.id}" view "${k}" must be text`); }));
+    }
+    if (q.rows) {
+      if (!Array.isArray(q.cols) || !Array.isArray(q.opts) || q.cols.length !== q.opts.length) err(q, "follow-up rows need cols and opts of equal length");
+      else q.rows.forEach((r, ri) => {
+        if (!r.l || !r.w) err(q, `follow-up ${ri} needs "l" and "w"`);
+        if (!Array.isArray(r.a) || r.a.length !== q.cols.length) return err(q, `follow-up ${ri} must have ${q.cols.length} answer(s)`);
+        r.a.forEach((a, ci) => { const o = (q.rowOpts && q.rowOpts[ri]) || q.opts[ci]; if (!o) { if (typeof a !== "number") err(q, `follow-up ${ri}: free-entry needs a number`); } else if (!o.includes(a)) err(q, `follow-up ${ri}: "${a}" isn't an option`); });
+      });
+    }
   } else err(q, `unknown type "${type}"`);
 }
 
